@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Any
-from animalbot import AnimalAgent
+from sustainabot import SustainabotAgent
 
 app = FastAPI()
 
@@ -16,7 +16,7 @@ app.add_middleware(
 )
 
 # Globale Instanz des AnimalAgent
-agent = AnimalAgent()
+agent = SustainabotAgent()
 
 class ChatMessage(BaseModel):
     message: str
@@ -36,7 +36,6 @@ async def chat(chat_message: ChatMessage):
         )
         return ChatResponse(
             response=response,
-            state=agent.state,
             log_message=log_message
         )
     except Exception as e:
@@ -44,4 +43,4 @@ async def chat(chat_message: ChatMessage):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000) 
+    uvicorn.run(app, host="0.0.0.0", port=8000)

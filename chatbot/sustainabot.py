@@ -258,6 +258,27 @@ def answer_question(query: str, docs, indices):
     return llm.invoke(formatted_prompt)
 
 # Main app
+
+class SustainabotAgent:
+    def __init__(self):
+        self.index, self.docs = load_faiss_index_and_docs()
+
+    def get_response(self, user_message: str, chat_history: list[str] = []):
+        query_vec = get_query_embedding(user_message)
+        indices, distances = search_index(self.index, query_vec, k=5)
+        response = answer_question(user_message, self.docs, indices)
+        if hasattr(response, "content"):
+            response_text = response.content
+        else:
+            response_text = str(response)
+        log_message = {
+            "user_message": user_message,
+            "indices": indices.tolist() if hasattr(indices, "tolist") else indices,
+            "response": response_text,
+        }
+        return response_text, log_message
+
+'''
 def main():
     index, docs = load_faiss_index_and_docs()
     while True:
@@ -268,10 +289,16 @@ def main():
         indices, distances = search_index(index, query_vec, k=5)
         response = answer_question(user_query, docs, indices)
         print("\n🤖 Answer:")
-        print(response)
+        print(response)'''
 
 if __name__ == "__main__":
-    main()
+    agent = SustainabotAgent()
+    while True:
+        user_message = input("Frage: ")
+        if user_message.lower() in ["exit", "quit"]:
+            break
+        response, _ = agent.get_response(user_message)
+        print("Antwort:", response)
 
 
 '''

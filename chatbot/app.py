@@ -4,8 +4,8 @@ import json
 
 # Konfiguration der Seite
 st.set_page_config(
-    page_title="Animal Chatbot",
-    page_icon="🐾",
+    page_title="Sustainabot",
+    page_icon="♻️",
     layout="centered"
 )
 
@@ -62,15 +62,11 @@ if "input_key" not in st.session_state:
     st.session_state.input_key = 0
 
 # Titel und Beschreibung
-st.title("🐾 Animal Chatbot")
+st.title("♻️ Sustainabot")
 st.markdown("""
-Chatte mit einem Fuchs oder einer Ente! 
-Sage einfach "Du bist ein Fuchs" oder "Du bist eine Ente" um den Charakter zu wechseln.
+Welcome to your first step towards sustainability! 🌱🌎
 """)
 
-# Status-Anzeige
-state_emoji = "🦊" if st.session_state.current_state == "fox" else "🦆"
-st.markdown(f"**Aktueller Charakter:** {state_emoji}")
 
 # Chat-Verlauf anzeigen
 for message in st.session_state.messages:
@@ -85,7 +81,7 @@ for message in st.session_state.messages:
         else:
             st.markdown(f"""
             <div class="chat-message bot">
-                <div>{state_emoji} <b>Bot:</b></div>
+                <div>🤖 <b>Bot:</b></div>
                 <div>{message["content"]}</div>
             </div>
             """, unsafe_allow_html=True)
@@ -93,7 +89,7 @@ for message in st.session_state.messages:
 # Eingabefeld in einem Container
 with st.container():
     st.markdown('<div class="input-container">', unsafe_allow_html=True)
-    user_input = st.text_input("Deine Nachricht:", key=f"user_input_{st.session_state.input_key}")
+    user_input = st.text_input("Your message:", key=f"user_input_{st.session_state.input_key}")
     st.markdown('</div>', unsafe_allow_html=True)
 
 if user_input and user_input != st.session_state.last_input:
