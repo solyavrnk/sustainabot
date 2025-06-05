@@ -6,13 +6,12 @@ It demonstrates how to interact with LLMs (Large Language Models) using Langchai
 
 For further information about Chat-AI, please also refer to the [Chat-AI.MD](/Chat-AI.md) document.
 
-# Animal Chatbot
+# SustainaBot
 
-A conversational AI chatbot that can switch between a duck and fox persona. The chatbot uses a language model to generate responses and can be interacted with through a web interface.
+A conversational AI chatbot that can advise a small-business owner on how to package and recycle their products in a sustainable way and advertise it. The chatbot uses a language model to generate responses and can be interacted with through a web interface.
 
 ## Features
 
-- Switch between duck and fox personas
 - Web interface built with Streamlit
 - FastAPI backend
 - Docker support
@@ -77,9 +76,6 @@ The application will be available at:
 
 1. Open the Streamlit interface in your browser
 2. Start chatting with the bot
-3. To switch personas, say:
-   - "You are a fox" to switch to fox mode
-   - "You are a duck" to switch to duck mode
 
 ## Project Structure
 
@@ -88,7 +84,7 @@ The application will be available at:
 ├── chatbot/
 │   ├── app.py          # Streamlit frontend
 │   ├── api.py          # FastAPI backend
-│   ├── animalbot.py    # Core chatbot logic
+│   ├── sustainabot.py  # Core chatbot logic
 │   └── Dockerfile      # Docker configuration
 ├── data/               # Data directory
 ├── requirements.txt    # Python dependencies
@@ -100,43 +96,18 @@ The application will be available at:
 
 - The frontend is built with Streamlit
 - The backend uses FastAPI
-- The chatbot logic is in `animalbot.py`
+- The chatbot logic is in `sustainabot.py`
 - Docker configuration is in `Dockerfile` and `compose.yml`
 
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
-# Animalbot
-
-The animalbot plays the role of a duck. He will only talk about duck related topics. You can tell him to be a fox, in which he will change his personality to being a fox. If you tell him to be a duck, he will change the personality back to duck.
-
-## Example conversation
-
-User: hi
-
-Bot: Quack! Nice to meet you, human! Did you know that we ducks have waterproof feathers? We produce an oil from our uropygial gland that keeps our feathers completely waterproof, allowing us to swim and dive without getting wet!
-
-User: tell me about your feathers
-
-Bot: My feathers! ...
-
-User: you are a fox
-
-Bot: My apologies! As a fox, I'd like to tell you about my silent steps. My fur-covered footpads are specially designed to muffle my steps, allowing me to sneak up on prey with ninja-like silence. It's a vital skill for a hunter like me!
-
-User: what kind of animal yare you?
-
-Bot: I'm a fox! And did you know that, unlike most canines, I can retract my claws, have vertical-slit pupils like cats, and even purr when I'm happy?
-
-User: what? tell me about your claws
-
-Bot: My claws! Unlike most dogs, I have retractable claws that...
 
 ## How to run it
 
 * Install the requirements.txt
-* `python animalbot.py` to start the chat on the console
+* `python sustainabot.py` to start the chat on the console
 
 ## Setting up a Virtual Environment
 
