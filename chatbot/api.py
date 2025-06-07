@@ -1,8 +1,8 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Any
-from sustainabot import SustainabotAgent
+from sustainabot import SustainabotAgent, LogWriter
 
 app = FastAPI()
 
@@ -17,6 +17,7 @@ app.add_middleware(
 
 # Globale Instanz des AnimalAgent
 agent = SustainabotAgent()
+log_writer = LogWriter()
 
 class ChatMessage(BaseModel):
     message: str
@@ -34,6 +35,7 @@ async def chat(chat_message: ChatMessage):
             chat_message.message, 
             chat_message.chat_history
         )
+        log_writer.write(log_message)
         return ChatResponse(
             response=response,
             state=response,
@@ -41,6 +43,18 @@ async def chat(chat_message: ChatMessage):
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/chat") 
+async def chat(request: Request): 
+    data = await request.json() 
+    user_message = data["message"]
+    chat_history = data.get("chat_history", [])
+    response_text, log_message = agent.get_response(user_message, chat_history)
+    log_writer.write(log_message) #for saving information about the conversation in conversation.jsonp
+    return {
+        "response": response_text,
+        "state": agent.wrap_up_triggered
+    }
 
 if __name__ == "__main__":
     import uvicorn
