@@ -36,6 +36,7 @@ async def chat(chat_message: ChatMessage):
         )
         return ChatResponse(
             response=response,
+            state=response,
             log_message=log_message
         )
     except Exception as e:
