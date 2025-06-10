@@ -54,8 +54,6 @@ st.markdown("""
 # Initialisierung des Session State
 if "messages" not in st.session_state:
     st.session_state.messages = []
-if "current_state" not in st.session_state:
-    st.session_state.current_state = "duck"
 if "last_input" not in st.session_state:
     st.session_state.last_input = ""
 if "input_key" not in st.session_state:
@@ -64,7 +62,8 @@ if "input_key" not in st.session_state:
 # Titel und Beschreibung
 st.title("♻️ Sustainabot")
 st.markdown("""
-Welcome to your first step towards sustainability! 🌱🌎
+🌱 Welcome to the Sustainable Packaging Consultant! 🌱🌎"\n
+I'll help you find eco-friendly packaging solutions for your business.
 """)
 
 
@@ -110,11 +109,10 @@ if user_input and user_input != st.session_state.last_input:
         
         # Bot-Antwort zum Chat-Verlauf hinzufügen
         st.session_state.messages.append({"role": "bot", "content": response_data["response"]})
-        st.session_state.current_state = response_data["state"]
         
         # Eingabefeld leeren durch Erhöhung des Keys
         st.session_state.input_key += 1
         st.experimental_rerun()
         
     except Exception as e:
-        st.error(f"Fehler bei der Kommunikation mit dem Server: {str(e)}") 
+        st.error(f"Fehler bei der Kommunikation mit dem Server: {str(e)}")

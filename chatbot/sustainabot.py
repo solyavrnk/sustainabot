@@ -16,6 +16,9 @@ from langchain_openai import ChatOpenAI
 from langchain_huggingface import HuggingFaceEndpoint
 from dotenv import load_dotenv
 
+from packaging_slots import PackagingSlots
+from log_writer import LogWriter  # <-- Add this import
+
 # Other imports we need for our program (mainly for data import and handling):
 
 # To send and get data from websites or online services (like your AI API):
@@ -230,300 +233,542 @@ def search_index(index, query_vector: np.ndarray, k=5):
 
 ########## End of Data Binding ##########
 
-# PS: ONLY FOR TESTING PURPOSES, I KNOW ITS NOT OUR IDEA!
-
-# Use AcademicCloud chat model to answer
-def answer_question(query: str, docs, indices):
-    context = "\n\n".join(docs[i].page_content for i in indices)
-
-    prompt_template = PromptTemplate.from_template(
-        "You are a helpful assistant that supports small businesses in becoming more sustainable.\n"
-        "Use the following context to answer the question as clearly and practically as possible:\n\n"
-        "{context}\n\n"
-        "Question: {question}\n"
-        "Answer:"
-    )
-    formatted_prompt = prompt_template.format(context=context, question=query)
-
-    # Use Mistral Large on AcademicCloud
-    llm = ChatOpenAI(
-        base_url="https://chat-ai.academiccloud.de/v1",
-        api_key=API_KEY,
-        model="mistral-large-instruct",
-        temperature=0.3
-        #model="meta-llama-3.1-8b-instruct",
-        #temperature=0.6,
-    )
-
-    return llm.invoke(formatted_prompt)
-
-# Main app
-
-class SustainabotAgent:
+class SustainabilityConsultant:
+    """Main consultant class with slot-filling capabilities"""
+    
+    STATE_GREETING = "greeting"
+    STATE_SLOT_FILLING = "slot_filling"
+    STATE_CONSULTATION = "consultation"
+    
     def __init__(self):
-        self.index, self.docs = load_faiss_index_and_docs()
-
-    def get_response(self, user_message: str, chat_history: list[str] = []):
-        query_vec = get_query_embedding(user_message)
-        indices, distances = search_index(self.index, query_vec, k=5)
-        response = answer_question(user_message, self.docs, indices)
-        if hasattr(response, "content"):
-            response_text = response.content
-        else:
-            response_text = str(response)
-        log_message = {
-            "user_message": user_message,
-            "indices": indices.tolist() if hasattr(indices, "tolist") else indices,
-            "response": response_text,
-        }
-        return response_text, log_message
-
-'''
-def main():
-    index, docs = load_faiss_index_and_docs()
-    while True:
-        user_query = input("\n💬 Ask your sustainability question (or type 'exit'): ")
-        if user_query.lower() == "exit":
-            break
-        query_vec = get_query_embedding(user_query)
-        indices, distances = search_index(index, query_vec, k=5)
-        response = answer_question(user_query, docs, indices)
-        print("\n🤖 Answer:")
-        print(response)'''
-
-if __name__ == "__main__":
-    agent = SustainabotAgent()
-    while True:
-        user_message = input("Frage: ")
-        if user_message.lower() in ["exit", "quit"]:
-            break
-        response, _ = agent.get_response(user_message)
-        print("Antwort:", response)
-
-
-'''
-
-# https://python.langchain.com/v0.1/docs/modules/callbacks/
-class CustomCallback(BaseCallbackHandler):
-
-    def __init__(self):
-        self.messages = {}
-
-    def on_llm_start(
-        self, serialized: dict[str, Any], prompts: list[str], **kwargs: Any
-    ) -> Any:
-        self.messages["on_llm_start_prompts"] = prompts
-        self.messages["on_llm_start_kwargs"] = kwargs
-
-    def on_llm_end(self, response: LLMResult, **kwargs: Any) -> Any:
-        self.messages["on_llm_end_response"] = response
-        self.messages["on_llm_end_kwargs"] = kwargs
-
-
-class AnimalAgent:
-
-    STATE_DUCK = "duck"
-    STATE_FOX = "fox"
-
-    def __init__(self):
-
-        # Initialize LLM using OpenAI-compatible API
-
-        # Set custom base URL and API key directly in the ChatOpenAI initialization
-        # Use the api_key that was determined outside of the class
+        # Initialize LLM
         self.llm = ChatOpenAI(
+            model="mistral-large-instruct",
+            temperature=0.3,
+            api_key=API_KEY,
+            base_url="https://chat-ai.academiccloud.de/v1",
+        )
+        
+        # Initialize slot extractor LLM (more focused for extraction)
+        self.extractor_llm = ChatOpenAI(
             model="meta-llama-3.1-8b-instruct",
-            temperature=0.6,
-            logprobs=True,
-            openai_api_key=API_KEY,
-            openai_api_base="https://chat-ai.academiccloud.de/v1",
+            temperature=0.1,
+            api_key=API_KEY,
+            base_url="https://chat-ai.academiccloud.de/v1",
         )
+        
+        self.state = self.STATE_GREETING
+        self.slots = PackagingSlots()
+        
+        # Create chains
+        self.slot_extractor = self.create_slot_extractor()
+        self.slot_classifier = self.create_slot_classifier()
+        self.question_generator = self.create_question_generator()
+        self.consultation_chain = self.create_consultation_chain()
+        self.goal_extractor = self.create_goal_extractor()
+        self.plan_generator = self.create_implementation_plan_generator()
+        self.goodbye_detector = self.goodbye_detector()        
+        self.log_writer = LogWriter()
+    def goodbye_detector(self):
+        """Creates a chain to detect if user wants to end a conversation"""
+        prompt = """You are detecting if a user wants to end a conversation. Analyze the user's message to determine if they are trying to say goodbye, end the conversation, or leave.
 
-        self.state = AnimalAgent.STATE_DUCK
-        self.fox_chain = self.create_fox_chain()
-        self.duck_chain = self.create_duck_chain()
+Look for various ways people say goodbye including:
+- Direct goodbyes: "bye", "goodbye", "see you", "farewell"
+- Casual endings: "thanks, that's all", "I'm done", "I'm good"
+- Polite endings: "thank you for your help", "that's all I needed"
+- Implicit endings: "gotta go", "I have to leave", "time to go"
+- Appreciation + ending: "thanks for everything", "you've been helpful"
+- Different languages: "auf wiedersehen", "au revoir", "ciao", "adios"
 
-        self.text_classifier_llm = ChatOpenAI(
-            model="meta-llama-3.1-8b-instruct",
-            temperature=0.01,
-            logprobs=True,
-            openai_api_key=API_KEY,
-            openai_api_base="https://chat-ai.academiccloud.de/v1",
-        )
+Respond with ONLY "YES" if the user wants to end the conversation, or "NO" if they want to continue.
 
-        self.text_classifier = self.create_text_classifier()
+Be generous in detecting goodbye intent - if there's any indication they want to end the conversation, respond with "YES".
 
-    def create_fox_chain(self):
-        prompt = """You are a fox and have a conversation with a human. You will direct every conversation towards one of these topics. 
+User message: {user_message}
 
-* Magnetic Hunting Skills – Foxes can use Earth’s magnetic field to hunt. They often pounce on prey from the northeast, using the magnetic field as a targeting system!
-* Cat-Like Behavior – Unlike most canines, foxes can retract their claws, have vertical-slit pupils like cats, and even purr when happy.
-* Silent Steps – Foxes have fur-covered footpads that muffle their steps, allowing them to sneak up on prey with ninja-like silence.
-* Communicative Tails – Foxes use their bushy tails (called "brushes") to communicate emotions, signal danger, and even cover their noses for warmth in winter.
-* Over 40 Different Sounds – Foxes are incredibly vocal and can make an eerie scream, giggle-like chirps, and even sounds that resemble human laughter.
-* Jumping Acrobatics – Some foxes, especially fennec foxes and red foxes, can leap over 10 feet in the air to catch prey or escape danger.
-* Urban Tricksters – Foxes have adapted well to cities, where they sometimes steal shoes, dig secret stashes of food, and even ride on public transportation!
-* Bioluminescent Fur? – Some species of foxes (like the Arctic fox) have been found to glow under UV light, though scientists are still studying why.
-* Winter Fur Color Change – Arctic foxes change fur color with the seasons—white in winter for camouflage in the snow, and brown in summer to blend with the tundra.
-* Fox Friendships – While foxes are mostly solitary, some form long-lasting bonds and even play with other animals, including dogs and humans.
+Answer:"""
 
-Follow these rules
-
-* Give short responses of maximal 3 sentences.
-* Do not include any newlines in the answer.
-
-{chat_history}
-User: {user_message}
-Bot: """
-
-        chain = PromptTemplate.from_template(prompt) | self.llm | StrOutputParser()
+        chain = PromptTemplate.from_template(prompt) | self.extractor_llm | StrOutputParser()
         return chain
-
-    def create_duck_chain(self):
-        prompt = """You are a duck and have a conversation with a human. You will direct every conversation towards one of these topics. 
-
-* Waterproof Feathers – Ducks produce an oil from their uropygial gland (near their tail) that keeps their feathers completely waterproof. Water just rolls right off!
-* 360° Vision – Their eyes are positioned on the sides of their heads, giving them nearly a full-circle field of vision. They can see behind them without turning their heads!
-* Synchronized Sleeping – Ducks can sleep with one eye open and one side of their brain awake, allowing them to stay alert for predators while resting.
-* Quack Echo Mystery – There’s an old myth that a duck’s quack doesn’t echo, but it actually does—just at a pitch and tone that makes it hard to notice.
-* Feet That Don’t Feel Cold – Ducks’ feet have no nerves or blood vessels in the webbing, so they can stand on ice without feeling the cold.
-* Egg-Dumping Behavior – Some female ducks practice "brood parasitism," laying eggs in another duck’s nest to have someone else raise their ducklings.
-* Mimicry Skills – Some ducks, like the musk duck, can mimic human speech and other sounds, much like parrots!
-* Built-In Goggles – Ducks have a third eyelid (nictitating membrane) that acts like swim goggles, allowing them to see underwater.
-* Instant Dabbling – Many ducks are "dabblers," tipping their heads underwater while their butts stick up, searching for food without fully submerging.
-
-Follow these rules
-
-* Give short responses of maximal 3 sentences.
-* Do not include any newlines in the answer.
-
-{chat_history}
-User: {user_message}
-Bot: """
-
-        chain = PromptTemplate.from_template(prompt) | self.llm | StrOutputParser()
-        return chain
-
-    def create_text_classifier(self):
-
-        prompt = """Given message to a chatbot, classifiy if the message tells the chatbot to be a duck, a fox or none of these. 
-
-* Answer with one word only.
-* Answer with duck, fox or none.
-* Do not respond with more than one word.
-
-Examples:
-
-Message: Hey there, you are a fox.
-Classification: fox
-
-Message: I know that you are a duck.
-Classification: duck
-
-Message: Hello how are you doing?
-Classification: none
-
-Message: {message}
-Classification: """
-
-        chain = (
-            PromptTemplate.from_template(prompt)
-            | self.text_classifier_llm
-            | StrOutputParser()
-        )
-        return chain
-
-    def get_response(self, user_message, chat_history):
-
-        classification_callback = CustomCallback()
-        text_classification = self.text_classifier.invoke(
-            user_message,
-            {"callbacks": [classification_callback], "stop_sequences": ["\n"]},
-        )
-
-        if text_classification.find("\n") > 0:
-            text_classification = text_classification[
-                0 : text_classification.find("\n")
-            ]
-        text_classification = text_classification.strip()
-
-        if text_classification == "fox":
-            self.state = AnimalAgent.STATE_FOX
-        elif text_classification == "duck":
-            self.state = AnimalAgent.STATE_DUCK
-
-        if self.state == AnimalAgent.STATE_FOX:
-            chain = self.fox_chain
-        elif self.state == AnimalAgent.STATE_DUCK:
-            chain = self.duck_chain
-
-        response_callback = CustomCallback()
-        chatbot_response = chain.invoke(
-            {"user_message": user_message, "chat_history": "\n".join(chat_history)},
-            {"callbacks": [response_callback], "stop_sequences": ["\n"]},
-        )
-
-        log_message = {
-            "user_message": str(user_message),
-            "chatbot_response": str(chatbot_response),
-            "agent_state": self.state,
-            "classification": {
-                "result": text_classification,
-                "llm_details": {
-                    key: value
-                    for key, value in classification_callback.messages.items()
-                },
-            },
-            "chatbot_response": {
-                key: value for key, value in response_callback.messages.items()
-            },
-        }
-
-        return chatbot_response, log_message
-
-
-class LogWriter:
-
-    def __init__(self):
-        self.conversation_logfile = "conversation.jsonp"
-        if os.path.exists(self.conversation_logfile):
-            os.remove(self.conversation_logfile)
-
-    # helper function to make sure json encoding the data will work
-    def make_json_safe(self, value):
-        if type(value) == list:
-            return [self.make_json_safe(x) for x in value]
-        elif type(value) == dict:
-            return {key: self.make_json_safe(value) for key, value in value.items()}
+    def is_goodbye_message(self, user_message: str) -> bool:
+        """Check if user message indicates they want to end the conversation"""
         try:
-            json.dumps(value)
-            return value
-        except TypeError as e:
-            return str(value)
+            result = self.goodbye_detector.invoke({"user_message": user_message})
+            return result.strip().upper() == "YES"
+        except Exception as e:
+            print(f"Error in goodbye detection: {e}")
+            # Fallback to simple keyword detection
+            goodbye_keywords = ["bye", "goodbye", "quit", "exit", "thanks that's all", "gotta go"]
+            return any(keyword in user_message.lower() for keyword in goodbye_keywords)
+     
+    def create_slot_extractor(self):
+        """Creates a chain to extract slot values from user input"""
+        prompt = """You are an information extractor for a sustainability consultant. Extract specific information from user messages.
 
-    def write(self, log_message):
-        with open(self.conversation_logfile, "a") as f:
-            f.write(json.dumps(self.make_json_safe(log_message), indent=2))
-            f.write("\n")
-            f.close()
+Extract the following information if present:
+1. Main product (what is your business's main product?)
+2. Product packaging (what do you use to package one item of your product and get it ready for shipping/delivery)
+3. Packaging material (which material is it? e.g., paper, organic, metal, glass, composite)
+4. Packaging reorder interval (how often you reorder packaging, e.g., monthly, quarterly)
+5. Packaging cost per order (how much do you pay for the packaging per order? Prices, costs, amounts with currency, in EUR)
+6. Packaging provider (who is your current supplier or provider?)
+7. Packaging budget (look for budget, total amount available, spending limit)
+8. Production location (in which country and city do you operate or produce? Country names, locations, "we are in", "based in")
+9. Shipping location (where do you ship your product? Country names, locations)
+10. Sustainability goals (do you need help with a packaging sustainability goal or want ideas?)
+
+Rules:
+- Only extract information that is explicitly mentioned
+- For prices/budgets: extract numbers with currency (convert to EUR if possible)
+- For country: extract the specific country name
+- If information is not present, respond with "NOT_FOUND"
+- Be conservative - only extract if you're confident
+
+Format your response as JSON:
+{{
+    "main_product": "value or NOT_FOUND",
+    "product_packaging": "value or NOT_FOUND",
+    "packaging_material": "value or NOT_FOUND",
+    "packaging_reorder_interval": "value or NOT_FOUND",
+    "packaging_cost_per_order": "value or NOT_FOUND",
+    "packaging_provider": "value or NOT_FOUND",
+    "packaging_budget": "value or NOT_FOUND",
+    "production_location": "value or NOT_FOUND",
+    "shipping_location": "value or NOT_FOUND",
+    "sustainability_goals": "value or NOT_FOUND",
+}}
+
+User message: {user_message}
+
+Extraction:"""
+
+        chain = PromptTemplate.from_template(prompt) | self.extractor_llm | StrOutputParser()
+        return chain
+    
+    def create_slot_classifier(self):
+        """Create a chain to classify if user is providing information or asking questions"""
+        prompt = """Classify the user's intent in this conversation about sustainable packaging.
+
+Possible classifications:
+- "providing_info" - User is giving information about their packaging situation
+- "asking_question" - User is asking about sustainability, alternatives, or advice
+- "greeting" - User is greeting or starting conversation
+- "unclear" - User's intent is unclear or they're confused
+
+Respond with only ONE word from the above options.
+
+User message: {user_message}
+Classification:"""
+
+        chain = PromptTemplate.from_template(prompt) | self.extractor_llm | StrOutputParser()
+        return chain
+    
+    def create_question_generator(self):
+        """Create a chain to generate questions for missing slots"""
+        prompt = """You are a friendly sustainability consultant helping small businesses with packaging. 
+Generate a natural question to ask for missing information.
+
+Context: We need to gather information about the user's current packaging situation to provide personalized advice.
+
+Current slots status:
+{slots_info}
+
+Missing information: {missing_slots}
+
+Generate ONE friendly, conversational question to ask for the MOST IMPORTANT missing information. 
+Make it sound natural and explain why you need this information.
+
+Question:"""
+
+        chain = PromptTemplate.from_template(prompt) | self.llm | StrOutputParser()
+        return chain
+    
+    def create_consultation_chain(self):
+        """Create a chain for providing consultation based on filled slots and retrieved context"""
+        prompt = """You are an expert sustainability consultant specializing in packaging solutions for small businesses.
+
+        User's packaging and sustainability information:
+        Main Product: {main_product}
+        Product Packaging: {product_packaging}
+        Packaging Material: {packaging_material}
+        Packaging Reorder Interval: {packaging_reorder_interval}
+        Packaging Cost Per Order: {packaging_cost_per_order}
+        Packaging Provider: {packaging_provider}
+        Packaging Budget: {packaging_budget}
+        Production Location: {production_location}
+        Shipping Location: {shipping_location}
+        Sustainability Goals: {sustainability_goals}
+
+        Relevant sustainability information from knowledge base:
+        {context}
+
+        Based on this information, provide personalized, practical advice for making their packaging more sustainable. Consider:
+        1. Cost-effective alternatives within their budget
+        2. Country-specific regulations and options
+        3. Gradual transition strategies
+
+        Keep your advice practical, specific, and actionable. Focus on solutions that work for small businesses.
+
+        User question: {user_question}
+
+        Advice:"""
+
+        chain = PromptTemplate.from_template(prompt) | self.llm | StrOutputParser()
+        return chain
+    
+    def extract_slots_from_message(self, user_message: str) -> Dict:
+        """Extract slot information from user message"""
+        try:
+            # Get extraction
+            extraction_result = self.slot_extractor.invoke({"user_message": user_message})
+            
+            # Try to parse JSON
+            try:
+                extracted_data = json.loads(extraction_result)
+            except json.JSONDecodeError:
+                # If JSON parsing fails, try to extract manually
+                extracted_data = {
+                    "main_product": "NOT_FOUND",
+                    "product_packaging": "NOT_FOUND",
+                    "packaging_material": "NOT_FOUND",
+                    "packaging_reorder_interval": "NOT_FOUND",
+                    "packaging_cost_per_order": "NOT_FOUND",
+                    "packaging_provider": "NOT_FOUND",
+                    "packaging_budget": "NOT_FOUND",
+                    "production_location": "NOT_FOUND",
+                    "shipping_location": "NOT_FOUND",
+                    "sustainability_goals": "NOT_FOUND",
+                }
+            
+            # Update slots with extracted information
+            updated_slots = []
+            for slot_name, value in extracted_data.items():
+                if value != "NOT_FOUND" and value and slot_name in self.slots.slots:
+                    self.slots.update_slot(slot_name, value)
+                    updated_slots.append(slot_name)
+            
+            return {"updated_slots": updated_slots, "extraction": extracted_data}
+            
+        except Exception as e:
+            print(f"Error in slot extraction: {e}")
+            return {"updated_slots": [], "extraction": {}}
+    
+    def generate_slot_question(self) -> str:
+        """Generate a question for the next missing slot"""
+        missing = self.slots.get_missing_slots()
+        if not missing:
+            return ""
+        
+        slots_info = ""
+        for slot, desc in PackagingSlots.REQUIRED_SLOTS.items():
+            status = "✅" if self.slots.slots[slot] is not None else "❌"
+            slots_info += f"{status} {desc}: {self.slots.slots[slot] or 'Not provided'}\n"
+        
+        question = self.question_generator.invoke({
+            "slots_info": slots_info,
+            "missing_slots": [PackagingSlots.REQUIRED_SLOTS[slot] for slot in missing]
+        }).strip()
+
+        # Remove surrounding quotes if present
+        if question.startswith('"') and question.endswith('"'):
+            question = question[1:-1].strip()
+        
+        return question
+    
+    def create_goal_extractor(self):
+        prompt = """You are a sustainability assistant. Extract the user’s main sustainability goal from their message.
+
+        Only extract **one clear goal**, and keep it concise (1 sentence max). If the goal is unclear, respond with "NOT_FOUND".
+
+        User message: {user_message}
+
+        Extracted goal:"""
+        chain = PromptTemplate.from_template(prompt) | self.extractor_llm | StrOutputParser()
+        return chain
+    
+    def create_implementation_plan_generator(self):
+        prompt = """You are an expert in sustainable packaging for small businesses.
+
+        Given the user's goal:
+        {goal}
+
+        And relevant information from our knowledge base:
+        {context}
+
+        Generate a **detailed, step-by-step checklist** (3–6 steps) to help the user implement their goal. Keep each step clear and actionable.
+
+        Checklist:"""
+        chain = PromptTemplate.from_template(prompt) | self.llm | StrOutputParser()
+        return chain
+
+    def generate_goal_checklist(self, user_message: str, index, docs) -> str:
+        goal = self.goal_extractor.invoke({"user_message": user_message}).strip()
+        
+        if goal == "NOT_FOUND":
+            return "I couldn't identify a clear goal in your message. Could you rephrase it?"
+
+        # Get relevant context from documents
+        query_vec = get_query_embedding(goal)
+        indices, _ = search_index(index, query_vec, k=5)
+        context = "\n\n".join(docs[i].page_content for i in indices)
+
+        checklist = self.plan_generator.invoke({
+            "goal": goal,
+            "context": context
+        })
+        
+        return checklist
+
+    
+    def get_consultation_response(self, user_question: str, index, docs) -> str:
+        """Generate consultation response using retrieved context"""
+
+        print("\n🛠️ Roadmap is being created...\nThis might take a moment ⏳")  
+
+        # Convert User Question to Vector
+        query_vec = get_query_embedding(user_question)
+
+        # Search for Relevant Documents (chooses the k most similar documents)
+        indices, distances = search_index(index, query_vec, k=5)
+
+        # Build Context from Documents
+        context = "\n\n".join(docs[i].page_content for i in indices)
+
+        # Retrieve slot values with fallback
+        main_product = self.slots.slots.get("main_product") or "Not specified"
+        product_packaging = self.slots.slots.get("product_packaging") or "Not specified"
+        packaging_material = self.slots.slots.get("packaging_material") or "Not specified"
+        packaging_reorder_interval = self.slots.slots.get("packaging_reorder_interval") or "Not specified"
+        packaging_cost_per_order = self.slots.slots.get("packaging_cost_per_order") or "Not specified"
+        packaging_provider = self.slots.slots.get("packaging_provider") or "Not specified"
+        packaging_budget = self.slots.slots.get("packaging_budget") or "Not specified"
+        production_location = self.slots.slots.get("production_location") or "Not specified"
+        shipping_location = self.slots.slots.get("shipping_location") or "Not specified"
+        sustainability_goals = self.slots.slots.get("sustainability_goals") or "Not specified"
+
+        # Generate main consultation response
+        consultation_response = self.consultation_chain.invoke({
+            "context": context,
+            "user_question": user_question,
+            "main_product": main_product,
+            "product_packaging": product_packaging,
+            "packaging_material": packaging_material,
+            "packaging_reorder_interval": packaging_reorder_interval,
+            "packaging_cost_per_order": packaging_cost_per_order,
+            "packaging_provider": packaging_provider,
+            "packaging_budget": packaging_budget,
+            "production_location": production_location,
+            "shipping_location": shipping_location,
+            "sustainability_goals": sustainability_goals,
+        })
+
+       ################################ ROADMAP ######################################################
+
+        roadmap_prompt = f"""
 
 
-if __name__ == "__main__":
+            You are a sustainability expert helping a small business improve its packaging strategy.
 
-    agent = AnimalAgent()
+            Business Profile:
+            Main Product: {main_product}
+            Production Location: {production_location}
+            Shipping Location: {shipping_location}
+
+            Packaging Details:
+            Product Packaging: {product_packaging}
+            Packaging Material: {packaging_material}
+            Packaging Provider: {packaging_provider}
+            Reorder Interval: {packaging_reorder_interval}
+            Cost per Order: {packaging_cost_per_order}
+            Packaging Budget: {packaging_budget}
+
+            Sustainability Goals:
+            {sustainability_goals}
+
+            User Question:
+            "{user_question}"
+
+            Relevant Sustainability Info (from documents):
+            {context}
+
+           ---
+
+           Write a friendly and well-structured sustainability roadmap for this business. Include:
+
+
+           1. **👋 Let's Get Started Together** (1–2 short sentences acknowledging their situation).
+           2. **🌿 Sustainability Strategy Overview** – 3–4 bullet points (no emojis) summarizing key goals.
+           3. **⚡️ Short-Term Goals (1–2 Months)** – 3–5 actionable bullet points (no emojis).
+           4. **📈 Mid-Term Goals (3–6 Months)** – 3–5 actionable bullet points (no emojis).
+           5. **🌱 Long-Term Vision (6–12 Months)** – 3–5 bullet points (no emojis).
+           6. **✅ Final Action Checklist** – A scannable to-do list (4–6 items, no emojis).
+
+
+           ✍️ Style:
+           - Be clear, supportive, and motivating.
+           - Use emojis only for section headers.
+           - Keep bullet points clean and text-focused.
+           - Avoid large text blocks or redundant content.
+           - Use any revelant information from the importet PDFsthat could be relevant.
+           - Write directly to the business owner (use “you”).
+           - Be empathetic and informative.
+        """
+
+        # Generate roadmap using LLM
+        roadmap_response = self.llm.invoke(roadmap_prompt).content.strip()
+
+        # Combine consultation and roadmap with separator
+        response = f"{consultation_response.strip()}\n\n---\n\n{roadmap_response}"
+
+        #return response
+        return roadmap_response;
+
+    def generate_wrap_up_summary(self) -> str:
+        """Generate a summary 4-6 sentences of the user's current situation based on filled slots."""
+        slots = self.slots.slots
+        prompt = (
+            "Based on the user's inputs, summarize their current situation.\n"
+            f"Main Product: {slots.get('main_product', '')}\n"
+            f"Product Packaging: {slots.get('product_packaging', '')}\n"
+            f"Packaging Material: {slots.get('packaging_material', '')}\n"
+            f"Packaging Reorder Interval: {slots.get('packaging_reorder_interval', '')}\n"
+            f"Packaging Cost Per Order: {slots.get('packaging_cost_per_order', '')}\n"
+            f"Packaging Provider: {slots.get('packaging_provider', '')}\n"
+            f"Packaging Budget: {slots.get('packaging_budget', '')}\n"
+            f"Production Location: {slots.get('production_location', '')}\n"
+            f"Shipping Location: {slots.get('shipping_location', '')}\n"
+            f"Sustainability Goals: {slots.get('sustainability_goals', '')}\n"
+            "\nCreate a short summary (4-6 sentences)."
+        )
+        summary = self.llm.invoke(prompt)
+        return summary.content if hasattr(summary, "content") else str(summary)
+
+    def get_response(self, user_question: str, chat_history: list, index, docs) -> str:
+        """Main response generation method"""
+        
+        # Classify user intent
+        intent = self.slot_classifier.invoke({"user_message": user_question}).strip().lower() #Greeting, providing info etc.
+        
+        # Extract slots from message
+        extraction_result = self.extract_slots_from_message(user_question) 
+        
+        if any(keyword in user_question.lower() for keyword in ["checklist", "steps", "plan", "how do i start"]):
+            return self.generate_goal_checklist(user_question, index, docs)
+        
+        # State management
+        if self.state == self.STATE_GREETING:
+            if intent in ["providing_info", "asking_question"] or extraction_result["updated_slots"]:
+                self.state = self.STATE_SLOT_FILLING
+        
+        # If all slots are filled, move to consultation
+        '''if self.slots.is_complete():
+            self.state = self.STATE_CONSULTATION
+        '''
+        # Allow transition if at least SOME useful info is gathered
+        filled_slots = [k for k, v in self.slots.slots.items() if v]
+        if len(filled_slots) >= 6:  # You can adjust the threshold
+            self.state = self.STATE_CONSULTATION
+
+        # Generate response based on state
+        if self.state == self.STATE_GREETING:
+            response = (
+                "Hello! I'm your sustainability consultant. I help small businesses find eco-friendly packaging solutions. "
+                f"{self.generate_slot_question()}"
+            )
+
+        
+        elif self.state == self.STATE_SLOT_FILLING:
+            if extraction_result["updated_slots"]:
+                # Only acknowledge update
+                ack = "Thanks for the information! "
+                
+                if not self.slots.is_complete():
+                    question = self.generate_slot_question()
+                    response = ack + question
+                else:
+                    response = ack + "Perfect! I now have all the information I need. How can I help you with sustainable packaging solutions?"
+                    self.state = self.STATE_CONSULTATION
+            else:
+                # No new information extracted, ask for missing slots
+                if intent == "asking_question":
+                    response = ("I'd love to help answer your question! But first, to give you personalized advice, "
+                               f"I need some information. {self.generate_slot_question()}")
+                else:
+                    response = self.generate_slot_question()
+        
+        elif self.state == self.STATE_CONSULTATION:
+            # Provide consultation using retrieved context
+            response = self.get_consultation_response(user_question, index, docs)
+        
+        else:
+            response = "I'm not sure how to help. Could you please rephrase your question?"
+        
+        # Save conversation to log file
+        log_message = {
+            "user_message": user_question,
+            "bot_response": response,
+            "slots": {k: v if v is not None else "" for k, v in self.slots.slots.items()}
+        }
+        self.log_writer.write(log_message)
+        return response, log_message
+
+def main():
+    """Main application loop"""
+
+    # Greeting and short explanation of what this bot is:
+    print("\n🌱 Welcome to the Sustainable Packaging Consultant! 🌎")
+    print("I'll help you find eco-friendly packaging solutions for your business.\n")
+
+    # Consent to the gathering of business info:
+    print("\n🔐 Before we begin:")
+    print("This chatbot will process your input to provide tailored sustainability advice.")
+    print("Your input may be logged for improving the service, but no personal data is stored❕")
+    consent = input("Do you agree to continue? (yes/no): ").strip().lower()
+
+    if consent not in ["yes", "y"]:
+        print("\n❌ Consent not given. Exiting the chat. Stay sustainable!🌿")
+        return
+    
+    # Load FAISS index and documents
+    try:
+        index, docs = load_faiss_index_and_docs()
+        print("\n✅ Knowledge base loaded successfully!")
+    except Exception as e:
+        print(f"\n❌ Error loading knowledge base: {e}")
+        return
+    
+    # Initialize consultant and logger
+    consultant = SustainabilityConsultant()
     chat_history = []
-    log_writer = LogWriter()
+    # Remove: log_writer = LogWriter() 
 
     while True:
-        user_message = input("User: ")
-        if user_message.lower() in ["quit", "exit", "bye"]:
-            print("Goodbye!")
+        user_message = input("\n💬 You: ")
+         
+        if consultant.is_goodbye_message(user_message):
+            print("\n🌱 Thank you for using the Sustainable Packaging Consultant! Have a green day! 🌎")
             break
+        
+        try:
+            bot_response, log_message = consultant.get_response(user_message, chat_history, index, docs)
+            print(f"\n🤖 Consultant: {bot_response}")
 
-        chatbot_response, log_message = agent.get_response(user_message, chat_history)
-        print("Bot: " + chatbot_response)
+            # Update chat history
+            chat_history.append(f"User: {user_message}")
+            chat_history.append(f"Bot: {bot_response}")
+            
+            # Show current slot status (for debugging)
+            if consultant.state in [consultant.STATE_SLOT_FILLING, consultant.STATE_CONSULTATION]:
+                missing = consultant.slots.get_missing_slots()
+                if missing:
+                    print(f"\n📋 Still need: {', '.join([PackagingSlots.REQUIRED_SLOTS[slot] for slot in missing])}")
+                else:
+                    print("\n✅ All information collected!")
+        
+        except Exception as e:
+            print(f"\n❌ Error: {e}")
+            print("Please try rephrasing your message.")
 
-        chat_history.extend("User: " + user_message)
-        chat_history.extend("Bot: " + chatbot_response)
-
-        log_writer.write(log_message)'''
+if __name__ == "__main__":
+    main()

@@ -2,9 +2,10 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Any
-from sustainabot import SustainabotAgent, LogWriter
+from sustainabot import SustainabilityConsultant, load_faiss_index_and_docs
 
 app = FastAPI()
+
 
 # CORS für lokale Entwicklung
 app.add_middleware(
@@ -15,9 +16,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Globale Instanz des AnimalAgent
-agent = SustainabotAgent()
-log_writer = LogWriter()
+# Load FAISS index and docs ONCE for the API process
+index, docs = load_faiss_index_and_docs()
+agent = SustainabilityConsultant()
 
 class ChatMessage(BaseModel):
     message: str
@@ -25,17 +26,25 @@ class ChatMessage(BaseModel):
 
 class ChatResponse(BaseModel):
     response: str
-    state: str
     log_message: Dict[str, Any]
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(chat_message: ChatMessage):
     try:
+        # Check for goodbye message
+        if hasattr(agent, "is_goodbye_message") and agent.is_goodbye_message(chat_message.message):
+            goodbye_text = "🌱 Thank you for using the Sustainable Packaging Consultant! Have a green day! 🌎"
+            return ChatResponse(
+                response=goodbye_text,
+                log_message={"info": "User ended chat with goodbye message."}
+            )
+        # Pass index and docs to the consultant for every request
         response, log_message = agent.get_response(
             chat_message.message, 
-            chat_message.chat_history
+            chat_message.chat_history,
+            index,
+            docs
         )
-        log_writer.write(log_message)
         return ChatResponse(
             response=response,
             state=response,
@@ -43,18 +52,6 @@ async def chat(chat_message: ChatMessage):
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/chat") 
-async def chat(request: Request): 
-    data = await request.json() 
-    user_message = data["message"]
-    chat_history = data.get("chat_history", [])
-    response_text, log_message = agent.get_response(user_message, chat_history)
-    log_writer.write(log_message) #for saving information about the conversation in conversation.jsonp
-    return {
-        "response": response_text,
-        "state": agent.wrap_up_triggered
-    }
 
 if __name__ == "__main__":
     import uvicorn
