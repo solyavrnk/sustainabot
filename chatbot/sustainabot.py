@@ -267,8 +267,42 @@ class SustainabilityConsultant:
         self.consultation_chain = self.create_consultation_chain()
         self.goal_extractor = self.create_goal_extractor()
         self.plan_generator = self.create_implementation_plan_generator()
-        self.goodbye_detector = self.goodbye_detector()        
+        self.goodbye_detector = self.goodbye_detector()  
+        self.checklist_intent_detector = self.create_checklist_intent_detector()       
         self.log_writer = LogWriter()
+    def create_checklist_intent_detector(self):
+        """Creates a chain to detect if user wants a checklist, steps, or implementation plan"""
+        prompt = """You are analyzing user messages to detect if they want a step-by-step checklist, implementation plan, or actionable steps.
+
+Look for various ways people ask for structured guidance:
+- Direct requests: "checklist", "steps", "plan", "roadmap", "guide"
+- Action-oriented: "how do I start", "what should I do", "how to implement", "where to begin"
+- Process questions: "what's the process", "walk me through", "step by step"
+- Planning language: "how to plan", "implementation", "action items", "tasks"
+- Sequential requests: "first step", "next steps", "in order", "sequence"
+
+Context: This is a sustainability packaging consultant helping businesses improve their packaging.
+
+User message: {user_message}
+
+Respond with ONLY "YES" if the user wants a checklist/steps/plan, or "NO" if they want general consultation/advice.
+
+Answer:"""
+
+        chain = PromptTemplate.from_template(prompt) | self.extractor_llm | StrOutputParser()
+        return chain
+    
+    def wants_checklist(self, user_message: str) -> bool:
+        """Check if user message indicates they want a checklist or step-by-step plan"""
+        try:
+            result = self.checklist_intent_detector.invoke({"user_message": user_message})
+            return result.strip().upper() == "YES"
+        except Exception as e:
+            print(f"Error in checklist intent detection: {e}")
+            # Fallback to simple keyword detection
+            checklist_keywords = ["checklist", "steps", "plan", "how do i start", "roadmap", "guide", "process", "implementation"]
+            return any(keyword in user_message.lower() for keyword in checklist_keywords)
+
     def goodbye_detector(self):
         """Creates a chain to detect if user wants to end a conversation"""
         prompt = """You are detecting if a user wants to end a conversation. Analyze the user's message to determine if they are trying to say goodbye, end the conversation, or leave.
@@ -653,7 +687,7 @@ Question:"""
         # Extract slots from message
         extraction_result = self.extract_slots_from_message(user_question) 
         
-        if any(keyword in user_question.lower() for keyword in ["checklist", "steps", "plan", "how do i start"]):
+        if self.wants_checklist(user_question):
             return self.generate_goal_checklist(user_question, index, docs)
         
         # State management
