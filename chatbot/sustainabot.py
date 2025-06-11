@@ -702,7 +702,7 @@ Question:"""
         '''
         # Allow transition if at least SOME useful info is gathered
         filled_slots = [k for k, v in self.slots.slots.items() if v]
-        if len(filled_slots) >= 3:  # You can adjust the threshold
+        if len(filled_slots) >= 8:  # You can adjust the threshold
             self.state = self.STATE_CONSULTATION
 
         # Generate response based on state
