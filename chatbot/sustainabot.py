@@ -239,6 +239,13 @@ class SustainabilityConsultant:
     STATE_GREETING = "greeting"
     STATE_SLOT_FILLING = "slot_filling"
     STATE_CONSULTATION = "consultation"
+
+    def generate_greeting(self) -> str:
+        return (
+            "Hello! I'm your sustainability consultant. I help small businesses find eco-friendly packaging solutions. "
+            "To start off, could you tell me what your business's main product is?"
+        )
+
     
     def __init__(self):
         # Initialize LLM
@@ -259,6 +266,8 @@ class SustainabilityConsultant:
         
         self.state = self.STATE_GREETING
         self.slots = PackagingSlots()
+        self.current_slot = None
+
         
         # Create chains
         self.slot_extractor = self.create_slot_extractor()
@@ -458,13 +467,18 @@ Question:"""
         """Generate a question for the next missing slot"""
         missing = self.slots.get_missing_slots()
         if not missing:
+            self.current_slot = None  # No missing slots to ask
             return ""
+        
+        # Step 1: Save the first missing slot key to self.current_slot
+        self.current_slot = missing[0]
         
         slots_info = ""
         for slot, desc in PackagingSlots.REQUIRED_SLOTS.items():
             status = "✅" if self.slots.slots[slot] is not None else "❌"
             slots_info += f"{status} {desc}: {self.slots.slots[slot] or 'Not provided'}\n"
         
+        # Step 2: Generate the question normally (your existing code)
         question = self.question_generator.invoke({
             "slots_info": slots_info,
             "missing_slots": [PackagingSlots.REQUIRED_SLOTS[slot] for slot in missing]
@@ -475,7 +489,24 @@ Question:"""
             question = question[1:-1].strip()
         
         return question
-    
+
+    def update_current_slot(self, user_message: str):
+        """Update the current slot with user input, handling 'I don't know' responses."""
+        if not self.current_slot:
+            return  # No slot currently being asked
+
+        uncertain_responses = [
+            "i don't know", "not sure", "no idea", "don't remember", "nope", "idk", "unknown", "none"
+        ]
+        normalized = user_message.strip().lower()
+
+        if normalized in uncertain_responses or len(normalized) == 0:
+            self.slots.update_slot(self.current_slot, "Unknown")
+        else:
+            self.slots.update_slot(self.current_slot, user_message.strip())
+
+        self.current_slot = None  # Reset current slot after update
+
     def create_goal_extractor(self):
         prompt = """You are a sustainability assistant. Extract the user’s main sustainability goal from their message.
 
@@ -607,6 +638,7 @@ Question:"""
 
            ✍️ Style:
            - Be clear, supportive, and motivating.
+           - Don't greet again when starting or giving the roadmap.
            - Use emojis only for section headers.
            - Keep bullet points clean and text-focused.
            - Avoid large text blocks or redundant content.
@@ -622,7 +654,8 @@ Question:"""
         response = f"{consultation_response.strip()}\n\n---\n\n{roadmap_response}"
 
         #return response
-        return roadmap_response;
+        return roadmap_response, False, {"info": "Generated consultation and roadmap"}
+
 
     def generate_wrap_up_summary(self) -> str:
         """Generate a summary 4-6 sentences of the user's current situation based on filled slots."""
@@ -644,7 +677,8 @@ Question:"""
         summary = self.llm.invoke(prompt)
         return summary.content if hasattr(summary, "content") else str(summary)
 
-    def get_response(self, user_question: str, chat_history: list, index, docs) -> str:
+    def get_response(self, user_question: str, chat_history: list, index, docs) -> tuple[str, bool, dict]:
+
         """Main response generation method"""
         
         # Classify user intent
@@ -667,22 +701,34 @@ Question:"""
         '''
         # Allow transition if at least SOME useful info is gathered
         filled_slots = [k for k, v in self.slots.slots.items() if v]
-        if len(filled_slots) >= 6:  # You can adjust the threshold
+        if len(filled_slots) >= 4:  # You can adjust the threshold
             self.state = self.STATE_CONSULTATION
 
         # Generate response based on state
         if self.state == self.STATE_GREETING:
             response = (
-                "Hello! I'm your sustainability consultant. I help small businesses find eco-friendly packaging solutions. "
+                "Hello!👋\nI'm your sustainability consultant. I help small businesses find eco-friendly packaging solutions. "
                 f"{self.generate_slot_question()}"
             )
-
+            is_loading = False
+            log_message = {
+                "user_message": user_question,
+                "bot_response": response,
+                "slots": {k: v if v is not None else "" for k, v in self.slots.slots.items()}
+            }
+            return response, is_loading, log_message
         
         elif self.state == self.STATE_SLOT_FILLING:
+           
+            # First update the current slot with the user input
+            self.update_current_slot(user_question)
+
+            # Then proceed with extracting slots from the message as usual
+            extraction_result = self.extract_slots_from_message(user_question)
+
             if extraction_result["updated_slots"]:
-                # Only acknowledge update
                 ack = "Thanks for the information! "
-                
+
                 if not self.slots.is_complete():
                     question = self.generate_slot_question()
                     response = ack + question
@@ -690,28 +736,44 @@ Question:"""
                     response = ack + "Perfect! I now have all the information I need. How can I help you with sustainable packaging solutions?"
                     self.state = self.STATE_CONSULTATION
             else:
-                # No new information extracted, ask for missing slots
+                # No new info extracted, ask for missing slots or answer question
                 if intent == "asking_question":
                     response = ("I'd love to help answer your question! But first, to give you personalized advice, "
-                               f"I need some information. {self.generate_slot_question()}")
+                                f"I need some information. {self.generate_slot_question()}")
                 else:
                     response = self.generate_slot_question()
-        
+
+            is_loading = False
+            log_message = {
+                "user_message": user_question,
+                "bot_response": response,
+                "slots": {k: v if v is not None else "" for k, v in self.slots.slots.items()}
+            }
+            return response, is_loading, log_message
+
         elif self.state == self.STATE_CONSULTATION:
-            # Provide consultation using retrieved context
-            response = self.get_consultation_response(user_question, index, docs)
-        
+            # Directly generate the roadmap and return it immediately
+            response_text, is_loading, log_data = self.get_consultation_response(user_question, index, docs)
+            self.state = self.STATE_END  # Or another state if you want
+            log_message = {
+                "user_message": user_question,
+                "bot_response": response_text,
+                "slots": {k: v if v is not None else "" for k, v in self.slots.slots.items()}
+            }
+            log_message.update(log_data)
+            return response_text, False, log_message  # is_loading = False
+
+
         else:
             response = "I'm not sure how to help. Could you please rephrase your question?"
-        
-        # Save conversation to log file
-        log_message = {
-            "user_message": user_question,
-            "bot_response": response,
-            "slots": {k: v if v is not None else "" for k, v in self.slots.slots.items()}
-        }
-        self.log_writer.write(log_message)
-        return response, log_message
+            is_loading = False
+            log_message = {
+                "user_message": user_question,
+                "bot_response": response,
+                "slots": {k: v if v is not None else "" for k, v in self.slots.slots.items()}
+            }
+            return response, is_loading, log_message
+
 
 def main():
     """Main application loop"""
@@ -739,9 +801,22 @@ def main():
         return
     
     # Initialize consultant and logger
+    # Bot starts the convo!
     consultant = SustainabilityConsultant()
     chat_history = []
-    # Remove: log_writer = LogWriter() 
+
+    # Initial greeting to start the conversation
+    initial_greeting, _, _ = consultant.get_response(
+        user_question="hello",
+        chat_history=chat_history,
+        index=index,
+        docs=docs
+    )
+
+    print(f"\n🤖 Consultant: {initial_greeting}")
+    chat_history.append("User: hello")
+    chat_history.append(f"Bot: {initial_greeting}")
+
 
     while True:
         user_message = input("\n💬 You: ")
