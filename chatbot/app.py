@@ -111,6 +111,13 @@ if "messages" not in st.session_state:
     except Exception as e:
         st.error(f"Fehler bei der Initialkommunikation mit dem Server: {str(e)}")
 
+# Titel und Beschreibung
+st.title("♻️ Sustainabot")
+st.markdown("""
+🌱 Welcome to the Sustainable Packaging Consultant! 🌱🌎"\n
+I'll help you find eco-friendly packaging solutions for your business.
+""")
+
 
 # Chat-Verlauf anzeigen
 for message in st.session_state.messages:

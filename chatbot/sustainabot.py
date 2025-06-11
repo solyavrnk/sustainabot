@@ -239,6 +239,8 @@ class SustainabilityConsultant:
     STATE_GREETING = "greeting"
     STATE_SLOT_FILLING = "slot_filling"
     STATE_CONSULTATION = "consultation"
+    STATE_END = "end"
+
 
     def generate_greeting(self) -> str:
         return (
@@ -595,10 +597,7 @@ Question:"""
         })
 
        ################################ ROADMAP ######################################################
-
         roadmap_prompt = f"""
-
-
             You are a sustainability expert helping a small business improve its packaging strategy.
 
             Business Profile:
@@ -623,30 +622,32 @@ Question:"""
             Relevant Sustainability Info (from documents):
             {context}
 
-           ---
+            ---
 
-           Write a friendly and well-structured sustainability roadmap for this business. Include:
+            Write a friendly and well-structured sustainability roadmap for this business. Include:
 
+            Thank you for providing the information about your business and packaging. Based on what you shared, here’s a roadmap to help you become more sustainable:
 
-           1. **👋 Let's Get Started Together** (1–2 short sentences acknowledging their situation).
-           2. **🌿 Sustainability Strategy Overview** – 3–4 bullet points (no emojis) summarizing key goals.
-           3. **⚡️ Short-Term Goals (1–2 Months)** – 3–5 actionable bullet points (no emojis).
-           4. **📈 Mid-Term Goals (3–6 Months)** – 3–5 actionable bullet points (no emojis).
-           5. **🌱 Long-Term Vision (6–12 Months)** – 3–5 bullet points (no emojis).
-           6. **✅ Final Action Checklist** – A scannable to-do list (4–6 items, no emojis).
+            1. 🌿 **Roadmap to Becoming a Green Thumb** – 1–2 short sentences acknowledging their current situation and encouraging them on their journey.
+            2. 💡 **Sustainability Strategy Overview** – 3–4 bullet points (no emojis) summarizing key goals.
+            3. ⚡️ **Short-Term Goals (1–2 Months)** – 3–5 actionable bullet points (no emojis).
+            4. 📈 **Mid-Term Goals (3–6 Months)** – 3–5 actionable bullet points (no emojis).
+            5. 🌱 **Long-Term Vision (6–12 Months)** – 3–5 bullet points (no emojis).
+            6. ✅ **Final Action Checklist** – A scannable to-do list (4–6 items, no emojis).
 
-
-           ✍️ Style:
-           - Be clear, supportive, and motivating.
-           - Don't greet again when starting or giving the roadmap.
-           - Use emojis only for section headers.
-           - Keep bullet points clean and text-focused.
-           - Avoid large text blocks or redundant content.
-           - Use any revelant information from the importet PDFsthat could be relevant.
-           - Write directly to the business owner (use “you”).
-           - Be empathetic and informative.
-        """
-
+            ✍️ Style:
+            - Be clear, supportive, and motivating.
+            - Don't greet again when starting or giving the roadmap or say anything like "welcome".
+            - Use bold text (with `**`) for section titles only — not for body text.
+            - Use emojis only for section headers.
+            - Keep bullet points clean and text-focused.
+            - Avoid large text blocks or redundant content.
+            - Use any relevant information from the imported PDFs.
+            - Write directly to the business owner (use “you”).
+            - Be empathetic and informative.
+            - Do **not** use Markdown headers (e.g., no `#`, `##`, or `###` syntax).
+            """
+        
         # Generate roadmap using LLM
         roadmap_response = self.llm.invoke(roadmap_prompt).content.strip()
 
@@ -701,7 +702,7 @@ Question:"""
         '''
         # Allow transition if at least SOME useful info is gathered
         filled_slots = [k for k, v in self.slots.slots.items() if v]
-        if len(filled_slots) >= 4:  # You can adjust the threshold
+        if len(filled_slots) >= 3:  # You can adjust the threshold
             self.state = self.STATE_CONSULTATION
 
         # Generate response based on state
