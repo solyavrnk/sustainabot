@@ -72,7 +72,7 @@ async def chat(chat_message: ChatMessage):
         if user_message in ["no", "n"]:
             # User explicitly said no after consent request
             return ChatResponse(
-                response="❌ Consent not given. You cannot use this service. Stay sustainable! 🌿",
+                response="❌ Consent not given. Stay sustainable! 🌿",
                 log_message={"error": "Consent explicitly denied by user after prompt"}
             )
 
