@@ -25,7 +25,6 @@ from typing import Optional
 class ChatMessage(BaseModel):
     message: str
     chat_history: List[str] = []
-    consent_given: Optional[bool] = None  # <-- make optional, default None
 
 class ChatResponse(BaseModel):
     response: str
@@ -34,26 +33,6 @@ class ChatResponse(BaseModel):
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(chat_message: ChatMessage):
-    if chat_message.consent_given is False:
-        # Explicit denial of consent
-        return ChatResponse(
-            response="❌ Consent not given. You cannot use this service. Stay sustainable! 🌿",
-            log_message={"error": "Consent explicitly denied by user"}
-        )
-
-    if chat_message.consent_given is None:
-        # Consent not provided yet — send explanation + prompt
-        consent_request_text = (
-            "\n\n"
-            "Before we get started: \n\n"
-            "This chatbot will process your input to provide tailored sustainability advice.\n"
-            "Your input may be logged for improving the service, but no personal data is stored‼️\n\n"
-            "🔐 Do you agree to continue? Please reply with 'yes' or 'no'."
-        )
-        return ChatResponse(
-            response=consent_request_text,
-            log_message={"info": "Consent requested"}
-        )
     
     # At this point consent_given is True → proceed as usual
     try:
@@ -67,26 +46,6 @@ async def chat(chat_message: ChatMessage):
             return ChatResponse(
                 response=greeting,
                 log_message={"info": "Bot started the conversation due to empty user message."}
-            )
-
-        if user_message in ["no", "n"]:
-            # User explicitly said no after consent request
-            return ChatResponse(
-                response="❌ Consent not given. Stay sustainable! 🌿",
-                log_message={"error": "Consent explicitly denied by user after prompt"}
-            )
-
-        if user_message in ["yes", "y"]:
-            greeting_response, is_loading, log_message = agent.get_response(
-                user_question="hello",  # triggers greeting logic in agent
-                chat_history=chat_message.chat_history,
-                index=index,
-                docs=docs
-            )
-            return ChatResponse(
-                response=f"🔐 Consent approved.\n\n{greeting_response}",
-                is_loading=is_loading,
-                log_message={**log_message, "info": "Consent given by user after prompt"}
             )
 
         # Normal chat flow
