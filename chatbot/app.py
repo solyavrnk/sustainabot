@@ -87,23 +87,21 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-
 # Initialisierung des Session State + automatische Begrüßung vom Bot
-# Session state initialization
 if "messages" not in st.session_state:
     st.session_state.messages = []
     st.session_state.last_input = ""
     st.session_state.input_key = 0
-    st.session_state.consent_given = None  # <-- Track consent status
-
+    st.session_state.is_loading = False
+    st.session_state.is_creating_roadmap = False  # NEW: track roadmap generation state
     # Initial bot greeting
     try:
         response = requests.post(
             "http://localhost:8000/chat",
             json={
-                "message": "",
-                "chat_history": [],
-                "consent_given": st.session_state.consent_given  # <-- send consent
+                "message": st.session_state.last_input,
+                "chat_history": [msg["content"] for msg in st.session_state.messages],
+                "generate_roadmap": st.session_state.is_creating_roadmap  # ✅ add this
             }
         )
         response_data = response.json()
@@ -117,7 +115,6 @@ st.markdown("""
 🌱 Welcome to the Sustainable Packaging Consultant! 🌎\n
 I'll help you find eco-friendly packaging solutions for your business.
 """)
-
 
 # Chat-Verlauf anzeigen
 for message in st.session_state.messages:
@@ -137,61 +134,70 @@ for message in st.session_state.messages:
             </div>
             """, unsafe_allow_html=True)
 
-# Zeige "generating roadmap..." Nachricht, wenn is_loading True ist
-if st.session_state.get("is_loading", False):
-    st.markdown("⏳ Please wait while we build your customized recommendations...")
+# Lade-Nachricht: Unterschiedliche Anzeige, je nach Status
+if st.session_state.is_loading:
+    if st.session_state.is_creating_roadmap:
+        st.markdown("🛠️ Roadmap is being created... This might take a moment ⏳")
+    else:
+        st.markdown("💬 Sustainabot is typing...")
+
 user_input = st.text_input("Your message:", key=f"user_input_{st.session_state.input_key}")
-    
-if not st.session_state.get("is_loading", False):
 
+# Schritt 1: Wenn noch nicht laden, auf neuen Input prüfen und Laden starten
+if not st.session_state.is_loading:
     if user_input and user_input != st.session_state.last_input:
-        # Reset loading state before sending new message
-        st.session_state.is_loading = False
-        # Update consent if user responds with yes or no
-        lower_input = user_input.strip().lower()
-        if lower_input in ["yes", "y"]:
-            st.session_state.consent_given = True
-        elif lower_input in ["no", "n"]:
-            st.session_state.consent_given = False
-
-        # Nachricht zum Chat-Verlauf hinzufügen
-        st.session_state.messages.append({"role": "user", "content": user_input})
+        st.session_state.is_loading = True
+        st.session_state.is_creating_roadmap = False  # Reset roadmap flag on new input
         st.session_state.last_input = user_input
+        st.session_state.input_key += 1  # reset text input
+        st.session_state.messages.append({"role": "user", "content": user_input})
+        st.experimental_rerun()  # force rerun here to show loading state
 
-        
-        try:
-            response = requests.post(
-                "http://localhost:8000/chat",
-                json={
-                    "message": user_input,
-                    "chat_history": [msg["content"] for msg in st.session_state.messages],
-                    "consent_given": st.session_state.consent_given
-                }
-            )
-            response_data = response.json()
-            st.write("DEBUG: response_data =", response_data)  # <-- add this to see what you got
+# Schritt 2: Lade-Modus läuft → Anfrage an Server senden
+if st.session_state.is_loading:
+    try:
+        response = requests.post(
+            "http://localhost:8000/chat",
+            json={
+                "message": st.session_state.last_input,
+                "chat_history": [msg["content"] for msg in st.session_state.messages],
+                "generate_roadmap": st.session_state.is_creating_roadmap  # ✅ this is crucial here
+            }
+        )
 
-            st.session_state.is_loading = response_data.get("is_loading", False)
+        response_data = response.json()
 
-            # Now check if 'response' key exists before using it
-            # Handle either a plain 'response' or a structured 'roadmap'
+        # If backend signals roadmap creation, set the flag
+        if response_data.get("is_loading", False):
+            st.session_state.is_creating_roadmap = True
+            st.experimental_rerun()
+        else:
+            st.session_state.is_creating_roadmap = False
+
             if "response" in response_data:
                 st.session_state.messages.append({"role": "bot", "content": response_data["response"]})
-            elif "roadmap" in response_data:
-                roadmap_items = response_data["roadmap"]
-                # Combine roadmap items into a markdown-friendly string
+
+            roadmap_items = response_data.get("roadmap")
+            if not isinstance(roadmap_items, list):
+                roadmap_items = []
+
+            roadmap_items = response_data.get("roadmap")
+            if isinstance(roadmap_items, list) and len(roadmap_items) > 0:
                 roadmap_markdown = "🗺️ **Your Roadmap to Sustainability**:\n\n"
                 for i, item in enumerate(roadmap_items, 1):
                     roadmap_markdown += f"{i}. {item}\n"
                 st.session_state.messages.append({"role": "bot", "content": roadmap_markdown})
-            else:
-                st.error("Error: Neither 'response' nor 'roadmap' found in server reply.")
 
+
+
+            st.session_state.is_loading = False
             st.session_state.input_key += 1
             try:
                 st.rerun()
             except AttributeError:
                 st.experimental_rerun()
 
-        except Exception as e:
-            st.error(f"Fehler bei der Kommunikation mit dem Server: {str(e)}")
+    except Exception as e:
+        st.error(f"Fehler bei der Kommunikation mit dem Server: {str(e)}")
+        st.session_state.is_loading = False
+        st.session_state.is_creating_roadmap = False
