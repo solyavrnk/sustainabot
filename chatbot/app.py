@@ -130,7 +130,6 @@ if st.session_state.consent_given is True:
         st.session_state.messages = []
         st.session_state.last_input = ""
         st.session_state.input_key = 0
-        st.session_state.consent_given = None  # <-- Track consent status
 
         # Initial bot greeting
         try:
