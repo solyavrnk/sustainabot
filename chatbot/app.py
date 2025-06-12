@@ -88,110 +88,146 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# Initialisierung des Session State + automatische Begrüßung vom Bot
-# Session state initialization
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-    st.session_state.last_input = ""
-    st.session_state.input_key = 0
-    st.session_state.consent_given = None  # <-- Track consent status
+if "consent_given" not in st.session_state:
+    st.session_state.consent_given = None
 
-    # Initial bot greeting
-    try:
-        response = requests.post(
-            "http://localhost:8000/chat",
-            json={
-                "message": "",
-                "chat_history": [],
-                "consent_given": st.session_state.consent_given  # <-- send consent
-            }
-        )
-        response_data = response.json()
-        st.session_state.messages.append({"role": "bot", "content": response_data["response"]})
-    except Exception as e:
-        st.error(f"Fehler bei der Initialkommunikation mit dem Server: {str(e)}")
-
-# Titel und Beschreibung
-st.title("♻️ Sustainabot")
-st.markdown("""
-🌱 Welcome to the Sustainable Packaging Consultant! 🌎\n
-I'll help you find eco-friendly packaging solutions for your business.
-""")
-
-
-# Chat-Verlauf anzeigen
-for message in st.session_state.messages:
+if st.session_state.consent_given is None:
     with st.container():
-        if message["role"] == "user":
-            st.markdown(f"""
-            <div class="chat-message user">
-                <div>👤 <b>You:</b></div>
-                <div>{message["content"]}</div>
-            </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.markdown(f"""
-            <div class="chat-message bot">
-                <div>🤖 <b>Bot:</b></div>
-                <div>{message["content"]}</div>
-            </div>
-            """, unsafe_allow_html=True)
+        st.markdown(
+            """
+            <h3>Before we get started:</h3>
+            <p style="font-size: 19px;">
+                This chatbot is designed to help you find sustainable packaging solutions ♻️.<br>
+                It will process your input to provide tailored sustainability advice.<br>
+                Your input may be logged for improving the service, but no personal data is stored‼️<br><br>
+                🔐 <strong>Do you agree to continue?</strong>
+            </p>
+            """,
+            unsafe_allow_html=True
+        )
+        col1, col2, col3 = st.columns([5, 2, 2])
+        col2.button("✅ Yes, I agree", on_click=lambda: setattr(st.session_state, 'consent_given', True))
+        col3.button("❌ No", on_click=lambda: setattr(st.session_state, 'consent_given', False))
 
-# Zeige "generating roadmap..." Nachricht, wenn is_loading True ist
-if st.session_state.get("is_loading", False):
-    st.markdown("⏳ Please wait while we build your customized recommendations...")
-user_input = st.text_input("Your message:", key=f"user_input_{st.session_state.input_key}")
-    
-if not st.session_state.get("is_loading", False):
 
-    if user_input and user_input != st.session_state.last_input:
-        # Reset loading state before sending new message
-        st.session_state.is_loading = False
-        # Update consent if user responds with yes or no
-        lower_input = user_input.strip().lower()
-        if lower_input in ["yes", "y"]:
-            st.session_state.consent_given = True
-        elif lower_input in ["no", "n"]:
-            st.session_state.consent_given = False
+if st.session_state.consent_given is False:
+    with st.container():
+        st.markdown("""
+            <h3>Consent Declined</h3>
+            <p style="font-size: 19px;">
+                No problem, we respect your decision. ✌️ <br>
+                If you change your mind, just click the button below to get started.
+            </p>
+        """, unsafe_allow_html=True)
 
-        # Nachricht zum Chat-Verlauf hinzufügen
-        st.session_state.messages.append({"role": "user", "content": user_input})
-        st.session_state.last_input = user_input
+        col1, col2 = st.columns([2, 1])
+        col2.button("✅ Agree", on_click=lambda: setattr(st.session_state, 'consent_given', True))
 
-        
+if st.session_state.consent_given is True:
+    # Initialisierung des Session State + automatische Begrüßung vom Bot
+    # Session state initialization
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+        st.session_state.last_input = ""
+        st.session_state.input_key = 0
+        st.session_state.consent_given = None  # <-- Track consent status
+
+        # Initial bot greeting
         try:
             response = requests.post(
                 "http://localhost:8000/chat",
                 json={
-                    "message": user_input,
-                    "chat_history": [msg["content"] for msg in st.session_state.messages],
-                    "consent_given": st.session_state.consent_given
+                    "message": "",
+                    "chat_history": [],
+                    "consent_given": st.session_state.consent_given  # <-- send consent
                 }
             )
             response_data = response.json()
-            st.write("DEBUG: response_data =", response_data)  # <-- add this to see what you got
-
-            st.session_state.is_loading = response_data.get("is_loading", False)
-
-            # Now check if 'response' key exists before using it
-            # Handle either a plain 'response' or a structured 'roadmap'
-            if "response" in response_data:
-                st.session_state.messages.append({"role": "bot", "content": response_data["response"]})
-            elif "roadmap" in response_data:
-                roadmap_items = response_data["roadmap"]
-                # Combine roadmap items into a markdown-friendly string
-                roadmap_markdown = "🗺️ **Your Roadmap to Sustainability**:\n\n"
-                for i, item in enumerate(roadmap_items, 1):
-                    roadmap_markdown += f"{i}. {item}\n"
-                st.session_state.messages.append({"role": "bot", "content": roadmap_markdown})
-            else:
-                st.error("Error: Neither 'response' nor 'roadmap' found in server reply.")
-
-            st.session_state.input_key += 1
-            try:
-                st.rerun()
-            except AttributeError:
-                st.experimental_rerun()
-
+            st.session_state.messages.append({"role": "bot", "content": response_data["response"]})
         except Exception as e:
-            st.error(f"Fehler bei der Kommunikation mit dem Server: {str(e)}")
+            st.error(f"Fehler bei der Initialkommunikation mit dem Server: {str(e)}")
+
+    # Titel und Beschreibung
+    st.title("♻️ Sustainabot")
+    st.markdown("""
+    🌱 Welcome to the Sustainable Packaging Consultant! 🌎\n
+    I'll help you find eco-friendly packaging solutions for your business.
+    """)
+
+
+    # Chat-Verlauf anzeigen
+    for message in st.session_state.messages:
+        with st.container():
+            if message["role"] == "user":
+                st.markdown(f"""
+                <div class="chat-message user">
+                    <div>👤 <b>You:</b></div>
+                    <div>{message["content"]}</div>
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown(f"""
+                <div class="chat-message bot">
+                    <div>🤖 <b>Bot:</b></div>
+                    <div>{message["content"]}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+    # Zeige "generating roadmap..." Nachricht, wenn is_loading True ist
+    if st.session_state.get("is_loading", False):
+        st.markdown("⏳ Please wait while we build your customized recommendations...")
+    user_input = st.text_input("Your message:", key=f"user_input_{st.session_state.input_key}")
+        
+    if not st.session_state.get("is_loading", False):
+
+        if user_input and user_input != st.session_state.last_input:
+            # Reset loading state before sending new message
+            st.session_state.is_loading = False
+            # Update consent if user responds with yes or no
+            lower_input = user_input.strip().lower()
+            if lower_input in ["yes", "y"]:
+                st.session_state.consent_given = True
+            elif lower_input in ["no", "n"]:
+                st.session_state.consent_given = False
+
+            # Nachricht zum Chat-Verlauf hinzufügen
+            st.session_state.messages.append({"role": "user", "content": user_input})
+            st.session_state.last_input = user_input
+
+            
+            try:
+                response = requests.post(
+                    "http://localhost:8000/chat",
+                    json={
+                        "message": user_input,
+                        "chat_history": [msg["content"] for msg in st.session_state.messages],
+                        "consent_given": st.session_state.consent_given
+                    }
+                )
+                response_data = response.json()
+                st.write("DEBUG: response_data =", response_data)  # <-- add this to see what you got
+
+                st.session_state.is_loading = response_data.get("is_loading", False)
+
+                # Now check if 'response' key exists before using it
+                # Handle either a plain 'response' or a structured 'roadmap'
+                if "response" in response_data:
+                    st.session_state.messages.append({"role": "bot", "content": response_data["response"]})
+                elif "roadmap" in response_data:
+                    roadmap_items = response_data["roadmap"]
+                    # Combine roadmap items into a markdown-friendly string
+                    roadmap_markdown = "🗺️ **Your Roadmap to Sustainability**:\n\n"
+                    for i, item in enumerate(roadmap_items, 1):
+                        roadmap_markdown += f"{i}. {item}\n"
+                    st.session_state.messages.append({"role": "bot", "content": roadmap_markdown})
+                else:
+                    st.error("Error: Neither 'response' nor 'roadmap' found in server reply.")
+
+                st.session_state.input_key += 1
+                try:
+                    st.rerun()
+                except AttributeError:
+                    st.experimental_rerun()
+
+            except Exception as e:
+                st.error(f"Fehler bei der Kommunikation mit dem Server: {str(e)}")

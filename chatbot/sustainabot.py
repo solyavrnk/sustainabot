@@ -87,42 +87,39 @@ BASE_URL = "https://chat-ai.academiccloud.de/v1/embeddings"
 
 # List of our PDFs local file paths to load and process::
 pdf_files = [
-    
-    #BSR:
-    "./PDFs/Abfaelle_LEP_70x105_2021-04_barrierefrei_WEB.pdf",
-    "./PDFs/BSR_Entsorgungsbilanz_2022.pdf",
-    "./PDFs/dnk_2020_berliner_stadtreinigung_nachhaltigkeitskodex_2020.pdf",
-    "./PDFs/Infoblatt_Mieterordner_210x297_2021-04_WEB.pdf",
-    
-    #UBA:
-
-    "./PDFs/2017-03-14_texte_22-2017_bilanzierung-verpackung.pdf",
-    "./PDFs/fachbroschuere_leitfaden_fuer_umweltgerechte_versandverpackungen_im_versa.pdf",
-    "./PDFs/04_2025_texte.pdf",
-    "./PDFs/35_2025_texte_bf.pdf",
-    "./PDFs/166_2024_texte.pdf",
-    "./PDFs/texte_16-2023_texte_sustainability_key_to_stability_security_resilience_bf.pdf",
-
-    #Ellen MacArthur Foundation:
-
-    "./PDFs/The_new_plastics_economy_Rethinking_the_future_of_plastics.pdf",
-    "./PDFs/reuse_revolution_scaling_returnable_packaging_study.pdf",
-    "./PDFs/Reuse_rethinking_packaging.pdf",
-    #"./PDFs/Flexible_Packaging_Supplementary_information.pdf", -> PDF seems to be broken
-    "./PDFs/Impact_Report_Summary_2024.pdf",
-    "./PDFs/Towards_the_circular_economy.pdf",
-
-    #Others: (mainly regarding sustainability FOR small businesses)
-    "./PDFs/20171113_Small_business__big_impact_publication_ENGLISH_version.pdf",
-    "./PDFs/becoming-a-sustainable-business-apr08.pdf",
-    "./PDFs/giz2022-en-green-business-guide.pdf",
-    "./PDFs/IJHLR-Volume.pdf",
-    "./PDFs/IJSRA-2024-2500.pdf",
-    "./PDFs/LouckMartensandChoSAMPJ2010.pdf",
-    "./PDFs/Small-Business-Britain-Small-Business-Green-Growth.pdf",
-    #"./PDFs/SME-EnterPRIZE-White-Paper.pdf", -> PDF seems to be broken
-    "./PDFs/Sustainability_Practices_in_Small_Business_Venture.pdf",
-]
+    # BSR:
+    #"./PDFs/Abfaelle_LEP_70x105_2021-04_barrierefrei_WEB.pdf",
+    #"./PDFs/BSR_Entsorgungsbilanz_2022.pdf",
+    #"./PDFs/dnk_2020_berliner_stadtreinigung_nachhaltigkeitskodex_2020.pdf",
+    #"./PDFs/Infoblatt_Mieterordner_210x297_2021-04_WEB.pdf",
+#
+    ## UBA:
+    #"./PDFs/2017-03-14_texte_22-2017_bilanzierung-verpackung.pdf",
+    #"./PDFs/fachbroschuere_leitfaden_fuer_umweltgerechte_versandverpackungen_im_versa.pdf",
+    #"./PDFs/04_2025_texte.pdf",
+    #"./PDFs/35_2025_texte_bf.pdf",
+    #"./PDFs/166_2024_texte.pdf",
+    #"./PDFs/texte_16-2023_texte_sustainability_key_to_stability_security_resilience_bf.pdf",
+#
+    ## Ellen MacArthur Foundation:
+    #"./PDFs/The_new_plastics_economy_Rethinking_the_future_of_plastics.pdf",
+    #"./PDFs/reuse_revolution_scaling_returnable_packaging_study.pdf",
+    #"./PDFs/Reuse_rethinking_packaging.pdf",
+    ## "./PDFs/Flexible_Packaging_Supplementary_information.pdf",  # PDF seems to be broken
+    #"./PDFs/Impact_Report_Summary_2024.pdf",
+    #"./PDFs/Towards_the_circular_economy.pdf",
+#
+    ## Others: (mainly regarding sustainability FOR small businesses)
+    #"./PDFs/20171113_Small_business__big_impact_publication_ENGLISH_version.pdf",
+    #"./PDFs/becoming-a-sustainable-business-apr08.pdf",
+    #"./PDFs/giz2022-en-green-business-guide.pdf",
+    #"./PDFs/IJHLR-Volume.pdf",
+    #"./PDFs/IJSRA-2024-2500.pdf",
+    #"./PDFs/LouckMartensandChoSAMPJ2010.pdf",
+    #"./PDFs/Small-Business-Britain-Small-Business-Green-Growth.pdf",
+    ## "./PDFs/SME-EnterPRIZE-White-Paper.pdf",  # PDF seems to be broken
+    #"./PDFs/Sustainability_Practices_in_Small_Business_Venture.pdf",
+]#
 
 #Load all PDFs and convert them into LangChain documents:
 all_docs = []
@@ -138,6 +135,9 @@ print(f"Total pages loaded from PDFs: {len(all_docs)}")
 # Split large documents into smaller chunks (e.g., ~1000 chars):
 text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
 docs_split = text_splitter.split_documents(all_docs)
+
+print(f"Total document chunks after splitting: {len(docs_split)}")
+
 
 print(f"Total document chunks after splitting: {len(docs_split)}")
 
