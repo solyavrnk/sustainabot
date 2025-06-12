@@ -63,6 +63,9 @@ async def chat(chat_message: ChatMessage):
             docs
         )
 
+        if hasattr(agent, "log_writer"):
+            agent.log_writer.write(log_message)
+
         print("DEBUG: Sending response:", {
             "response": response,
             "is_loading": is_loading,

@@ -31,5 +31,6 @@ class LogWriter:
         # ...otherwise, do not add slots
 
         with open(self.conversation_logfile, "a") as f:
-            f.write(json.dumps(self.make_json_safe(log_message), ensure_ascii=False, indent=2))
-            f.write("\n")
+            with open(self.conversation_logfile, "a", encoding="utf-8") as f:
+                f.write(json.dumps(self.make_json_safe(log_message), ensure_ascii=False, indent=2))
+                f.write("\n")
