@@ -114,7 +114,7 @@ if "messages" not in st.session_state:
 # Titel und Beschreibung
 st.title("♻️ Sustainabot")
 st.markdown("""
-🌱 Welcome to the Sustainable Packaging Consultant! 🌱🌎"\n
+🌱 Welcome to the Sustainable Packaging Consultant! 🌎\n
 I'll help you find eco-friendly packaging solutions for your business.
 """)
 

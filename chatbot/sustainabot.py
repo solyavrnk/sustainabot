@@ -626,9 +626,9 @@ Question:"""
 
             Write a friendly and well-structured sustainability roadmap for this business. Include:
 
-            Thank you for providing the information about your business and packaging. Based on what you shared, here’s a roadmap to help you become more sustainable:
+            Thank you for providing the information about your business and packaging.
 
-            1. 🌿 **Roadmap to Becoming a Green Thumb** – 1–2 short sentences acknowledging their current situation and encouraging them on their journey.
+            1. 🌿 **Roadmap to Becoming a Green Thumb** – 1–2 short sentences (under this title) acknowledging their current situation and encouraging them on their journey.
             2. 💡 **Sustainability Strategy Overview** – 3–4 bullet points (no emojis) summarizing key goals.
             3. ⚡️ **Short-Term Goals (1–2 Months)** – 3–5 actionable bullet points (no emojis).
             4. 📈 **Mid-Term Goals (3–6 Months)** – 3–5 actionable bullet points (no emojis).
