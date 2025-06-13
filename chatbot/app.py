@@ -2,7 +2,6 @@ import streamlit as st
 import requests
 import json
 
-# Konfiguration der Seite
 st.set_page_config(
     page_title="Sustainabot",
     page_icon="♻️",
@@ -88,8 +87,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-
-# Initialisierung des Session State + automatische Begrüßung vom Bot
 if "messages" not in st.session_state:
     st.session_state.messages = []
     st.session_state.last_input = ""
@@ -136,7 +133,7 @@ for message in st.session_state.messages:
             </div>
             """, unsafe_allow_html=True)
 
-# Lade-Nachricht: Unterschiedliche Anzeige, je nach Status
+
 if st.session_state.is_loading:
     if st.session_state.is_creating_roadmap:
         st.markdown("🛠️ Roadmap is being created... This might take a moment ⏳")
@@ -145,17 +142,17 @@ if st.session_state.is_loading:
 
 user_input = st.text_input("Your message:", key=f"user_input_{st.session_state.input_key}")
 
-# Schritt 1: Wenn noch nicht laden, auf neuen Input prüfen und Laden starten
+
 if not st.session_state.is_loading:
     if user_input and user_input != st.session_state.last_input:
         st.session_state.is_loading = True
-        st.session_state.is_creating_roadmap = False  # Reset roadmap flag on new input
+        st.session_state.is_creating_roadmap = False  
         st.session_state.last_input = user_input
-        st.session_state.input_key += 1  # reset text input
+        st.session_state.input_key += 1  
         st.session_state.messages.append({"role": "user", "content": user_input})
-        st.experimental_rerun()  # force rerun here to show loading state
+        st.experimental_rerun()  
 
-# Schritt 2: Lade-Modus läuft → Anfrage an Server senden
+
 if st.session_state.is_loading:
     try:
         response = requests.post(
@@ -163,7 +160,7 @@ if st.session_state.is_loading:
             json={
                 "message": st.session_state.last_input,
                 "chat_history": [msg["content"] for msg in st.session_state.messages],
-                "generate_roadmap": st.session_state.is_creating_roadmap  # ✅ this is crucial here
+                "generate_roadmap": st.session_state.is_creating_roadmap  
             }
         )
 
@@ -182,14 +179,6 @@ if st.session_state.is_loading:
             roadmap_items = response_data.get("roadmap")
             if not isinstance(roadmap_items, list):
                 roadmap_items = []
-
-            '''roadmap_items = response_data.get("roadmap")
-            if isinstance(roadmap_items, list) and len(roadmap_items) > 0:
-                roadmap_markdown = "🗺️ **Your Roadmap to Sustainability**:\n\n"
-                for i, item in enumerate(roadmap_items, 1):
-                    roadmap_markdown += f"{i}. {item}\n"
-                st.session_state.messages.append({"role": "bot", "content": roadmap_markdown})'''
-
 
 
             st.session_state.is_loading = False
