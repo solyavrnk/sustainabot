@@ -9,7 +9,6 @@ st.set_page_config(
     layout="centered"
 )
 
-# CSS für besseres Styling
 st.markdown("""
 <style>
     /* Hide Streamlit UI elements */
@@ -21,42 +20,44 @@ st.markdown("""
     /* Style the input box */
     .stTextInput>div>div>input {
         background-color: #f0f2f6 !important;
-        border: 1px solid #ccc !important;
+        border: 4px solid #4B5320 !important; /* dark military green */
         border-radius: 4px !important;
         transition: border-color 0.3s ease, box-shadow 0.3s ease !important;
         outline: none !important;
+        box-shadow: 0 0 8px 2px #4B5320 !important;
         -webkit-appearance: none !important;
         appearance: none !important;
-        box-shadow: none !important;
     }
 
-    /* On focus, bright green border and glow */
+    /* On focus: lighter military green with stronger glow */
     .stTextInput>div>div>input:focus,
     .stTextInput>div>div>input:focus-visible {
-        border: 2px solid #00FF00 !important;
-        box-shadow: 0 0 8px 2px #00FF00 !important;
+        border: 4px solid #6B8E23 !important; /* lighter military green */
+        box-shadow: 0 0 12px 4px #6B8E23 !important;
         outline: none !important;
     }
 
-    /* Override all invalid styles (including autofill and autofill focus) */
-    .stTextInput>div>div>input:invalid,
-    .stTextInput>div>div>input:invalid:focus,
-    .stTextInput>div>div>input:invalid:focus-visible,
-    .stTextInput>div>div>input:-webkit-autofill,
-    .stTextInput>div>div>input:-webkit-autofill:focus {
-        border-color: #00FF00 !important;
-        box-shadow: 0 0 8px 2px #00FF00 !important;
+    /* Autofill and invalid inputs override */
+    input:-webkit-autofill,
+    input:-webkit-autofill:focus,
+    input:-webkit-autofill:active,
+    input:invalid,
+    input:invalid:focus {
+        border: 4px solid #6B8E23 !important;
+        box-shadow: 0 0 12px 4px #6B8E23 !important;
+        -webkit-box-shadow: 0 0 12px 4px #6B8E23 inset !important;
+        background-color: #f0f2f6 !important;
+        color: black !important;
         outline: none !important;
-        -webkit-box-shadow: 0 0 8px 2px #00FF00 inset !important;
     }
 
-    /* Remove any red browser validation bubbles/arrows */
-    .stTextInput>div>div>input::-webkit-validation-bubble-arrow,
-    .stTextInput>div>div>input::-webkit-validation-bubble-arrow-body {
+    /* Remove browser red validation icons/arrows */
+    input::-webkit-validation-bubble-arrow,
+    input::-webkit-validation-bubble-arrow-body {
         display: none !important;
     }
 
-    /* Chat styling (unchanged) */
+    /* Chat styling */
     .chat-message {
         padding: 1.5rem;
         border-radius: 0.5rem;
@@ -86,6 +87,7 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
+
 
 # Initialisierung des Session State + automatische Begrüßung vom Bot
 if "messages" not in st.session_state:
@@ -181,12 +183,12 @@ if st.session_state.is_loading:
             if not isinstance(roadmap_items, list):
                 roadmap_items = []
 
-            roadmap_items = response_data.get("roadmap")
+            '''roadmap_items = response_data.get("roadmap")
             if isinstance(roadmap_items, list) and len(roadmap_items) > 0:
                 roadmap_markdown = "🗺️ **Your Roadmap to Sustainability**:\n\n"
                 for i, item in enumerate(roadmap_items, 1):
                     roadmap_markdown += f"{i}. {item}\n"
-                st.session_state.messages.append({"role": "bot", "content": roadmap_markdown})
+                st.session_state.messages.append({"role": "bot", "content": roadmap_markdown})'''
 
 
 
