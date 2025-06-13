@@ -569,11 +569,14 @@ Question:"""
         chain = PromptTemplate.from_template(prompt) | self.llm | StrOutputParser()
         return chain
 
-    def generate_goal_checklist(self, user_message: str, index, docs) -> str:
+    def generate_goal_checklist(self, user_message: str, index, docs) -> tuple[str, bool, dict, None]:
         goal = self.goal_extractor.invoke({"user_message": user_message}).strip()
         
         if goal == "NOT_FOUND":
-            return "I couldn't identify a clear goal in your message. Could you rephrase it?"
+            response = "I couldn't identify a clear goal in your message. Could you rephrase it?"
+            is_loading = False
+            log_message = {"user_message": user_message, "bot_response": response}
+            return response, is_loading, log_message, None
 
         # Get relevant context from documents
         query_vec = get_query_embedding(goal)
@@ -585,7 +588,10 @@ Question:"""
             "context": context
         })
         
-        return checklist
+        is_loading = False
+        log_message = {"user_message": user_message, "bot_response": checklist}
+        return checklist, is_loading, log_message, None
+
 
     
     def get_consultation_response(self, user_question: str, index, docs) -> str:
@@ -712,7 +718,8 @@ Question:"""
         summary = self.llm.invoke(prompt)
         return summary.content if hasattr(summary, "content") else str(summary)
 
-    def get_response(self, user_question: str, chat_history: list, index, docs) -> tuple[str, bool, dict]:
+    def get_response(self, user_question: str, chat_history: list, index, docs, generate_roadmap: bool = False) -> tuple[str, bool, dict, list | None]:
+
 
         """Main response generation method"""
         
@@ -723,8 +730,14 @@ Question:"""
         extraction_result = self.extract_slots_from_message(user_question) 
         
         if self.wants_checklist(user_question):
-            return self.generate_goal_checklist(user_question, index, docs)
-        
+            result = self.generate_goal_checklist(user_question, index, docs)
+            if len(result) == 3:
+                # If only 3 values returned, add None for roadmap
+                return (*result, None)
+            else:
+                return result
+
+                
         # State management
         if self.state == self.STATE_GREETING:
             if intent in ["providing_info", "asking_question"] or extraction_result["updated_slots"]:
@@ -736,7 +749,7 @@ Question:"""
         '''
         # Allow transition if at least SOME useful info is gathered
         filled_slots = [k for k, v in self.slots.slots.items() if v]
-        if len(filled_slots) >= 7:  # You can adjust the threshold
+        if len(filled_slots) >= 3:  # You can adjust the threshold
             self.state = self.STATE_CONSULTATION
 
         # Generate response based on state
@@ -751,7 +764,8 @@ Question:"""
                 "bot_response": response,
                 "slots": {k: v if v is not None else "" for k, v in self.slots.slots.items()}
             }
-            return response, is_loading, log_message
+            return response, is_loading, log_message, None
+
         
         elif self.state == self.STATE_SLOT_FILLING:
            
@@ -784,20 +798,34 @@ Question:"""
                 "bot_response": response,
                 "slots": {k: v if v is not None else "" for k, v in self.slots.slots.items()}
             }
-            return response, is_loading, log_message
+            return response, is_loading, log_message, None
 
         elif self.state == self.STATE_CONSULTATION:
-            # Directly generate the roadmap and return it immediately
-            response_text, is_loading, log_data = self.get_consultation_response(user_question, index, docs)
-            self.state = self.STATE_END  # Or another state if you want
-            log_message = {
-                "user_message": user_question,
-                "bot_response": response_text,
-                "slots": {k: v if v is not None else "" for k, v in self.slots.slots.items()}
-            }
-            log_message.update(log_data)
-            return response_text, False, log_message  # is_loading = False
-
+            if not generate_roadmap:
+                # Return loading message immediately
+                loading_message = "🛠️ Roadmap is being created... This might take a moment ⏳"
+                is_loading = True
+                log_message = {
+                    "user_message": user_question,
+                    "bot_response": loading_message,
+                    "slots": {k: v if v is not None else "" for k, v in self.slots.slots.items()}
+                }
+                return loading_message, is_loading, log_message, None
+            
+            else:
+                # Actually generate the roadmap and return the full response
+                response_text, is_loading, log_data = self.get_consultation_response(user_question, index, docs)
+                self.state = self.STATE_END
+                log_message = {
+                    "user_message": user_question,
+                    "bot_response": response_text,
+                    "slots": {k: v if v is not None else "" for k, v in self.slots.slots.items()}
+                }
+                log_message.update(log_data)  # ✅ Include all consultation output like roadmap, sources, etc.
+                roadmap_items = log_data.get("roadmap") if log_data else []
+                if roadmap_items is None:
+                    roadmap_items = []
+                return response_text, False, log_message, roadmap_items
 
         else:
             response = "I'm not sure how to help. Could you please rephrase your question?"
@@ -807,7 +835,7 @@ Question:"""
                 "bot_response": response,
                 "slots": {k: v if v is not None else "" for k, v in self.slots.slots.items()}
             }
-            return response, is_loading, log_message
+            return response, is_loading, log_message, None
 
 
 def main():
