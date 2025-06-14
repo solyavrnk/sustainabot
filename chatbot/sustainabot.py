@@ -638,7 +638,7 @@ Question:"""
 
        ################################ ROADMAP ######################################################
         roadmap_prompt = f"""
-            You are a sustainability expert helping a small business improve its packaging strategy.
+            You are a sustainability expert helping a small business to improve its packaging strategy.
 
             Business Profile:
             Main Product: {main_product}
@@ -845,6 +845,7 @@ def main():
     print("\n🌱 Welcome to the Sustainable Packaging Consultant! 🌎")
     print("I'll help you find eco-friendly packaging solutions for your business.\n")
 
+    # for some reason, the static message doesn't show (step 2)
     # Consent to the gathering of business info:
     print("\n🔐 Before we begin:")
     print("This chatbot will process your input to provide tailored sustainability advice.")
@@ -876,6 +877,7 @@ def main():
         docs=docs
     )
 
+    # what's this for?
     print(f"\n🤖 Consultant: {initial_greeting}")
     chat_history.append("User: hello")
     chat_history.append(f"Bot: {initial_greeting}")
@@ -902,7 +904,10 @@ def main():
                 if missing:
                     print(f"\n📋 Still need: {', '.join([PackagingSlots.REQUIRED_SLOTS[slot] for slot in missing])}")
                 else:
+                    # the summary is not provided in this case, the user can not see and fix wrong data (step 4)
                     print("\n✅ All information collected!")
+                    # there is no confirmation that the bot starts working on the roadmap (step 5)
+                    # bot doesn't ask if the user needs help with understanding any action
         
         except Exception as e:
             print(f"\n❌ Error: {e}")
