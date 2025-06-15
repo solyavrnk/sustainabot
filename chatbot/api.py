@@ -27,11 +27,14 @@ class ChatMessage(BaseModel):
     message: str
     chat_history: List[str] = []
     slots: Optional[Dict[str, Any]] = {}
+    generate_roadmap: Optional[bool] = False  # default False
 
 class ChatResponse(BaseModel):
     response: str
-    is_loading: bool = False  # default False
+    is_loading: bool = False
     log_message: Dict[str, Any]
+    roadmap: Optional[List[str]] = None  # ✅ Add this
+
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(chat_message: ChatMessage):
@@ -68,13 +71,13 @@ async def chat(chat_message: ChatMessage):
                 response=goodbye_text,
                 log_message=log_message
             )
-        
-        # Normaler Flow
-        response, is_loading, log_message = agent.get_response(
+
+        response, is_loading, log_message, roadmap = agent.get_response(
             user_message,
             chat_message.chat_history,
             index,
-            docs
+            docs,
+            generate_roadmap=chat_message.generate_roadmap
         )
         # zieh Dir hier den aktuellen Slot‐State aus dem Agenten
         log_message["slots"] = {
@@ -85,19 +88,23 @@ async def chat(chat_message: ChatMessage):
         # Loggen
         if hasattr(agent, "log_writer"):
             agent.log_writer.write(log_message)
+        # If roadmap is still generating, override response with loading message
+        if is_loading:
+            response = "🛠️ Roadmap is being created... This might take a moment ⏳"
 
         return ChatResponse(
             response=response,
             is_loading=is_loading,
-            log_message=log_message
+            log_message=log_message,
+            roadmap=roadmap  # ✅ use actual roadmap variable
         )
+
 
     except Exception as e:
         import traceback
         traceback.print_exc()
         print("ERROR:", e)
         raise HTTPException(status_code=500, detail=str(e))
-
 
 
 if __name__ == "__main__":
