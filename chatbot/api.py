@@ -1,8 +1,9 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from sustainabot import SustainabilityConsultant, load_faiss_index_and_docs
+from log_writer import LogWriter
 
 app = FastAPI()
 
@@ -19,12 +20,13 @@ app.add_middleware(
 # Load FAISS index and docs ONCE for the API process
 index, docs = load_faiss_index_and_docs()
 agent = SustainabilityConsultant()
-
-from typing import Optional
+# Instantiate log writer and attach to agent
+agent.log_writer = LogWriter()
 
 class ChatMessage(BaseModel):
     message: str
     chat_history: List[str] = []
+    slots: Optional[Dict[str, Any]] = {}
     generate_roadmap: Optional[bool] = False  # default False
 
 class ChatResponse(BaseModel):
@@ -36,26 +38,33 @@ class ChatResponse(BaseModel):
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(chat_message: ChatMessage):
-    # At this point consent_given is True → proceed as usual
+    slots = chat_message.slots or {}
     try:
         user_message = chat_message.message.strip().lower()
 
+        # Begrüßung
         if not user_message:
             if hasattr(agent, "generate_greeting"):
                 greeting = agent.generate_greeting()
             else:
                 greeting = "🌱 Hello! I'm your Sustainable Packaging Consultant. How can I help you today?"
+            log_message = {"info": "Bot greeting", "slots": slots}
+            # Log in Datei schreiben
+            agent.log_writer.write(log_message)
             return ChatResponse(
                 response=greeting,
-                log_message={"info": "Bot started the conversation due to empty user message."}
+                log_message=log_message
             )
 
-        # Normal chat flow
+        # Goodbye
         if hasattr(agent, "is_goodbye_message") and agent.is_goodbye_message(user_message):
             goodbye_text = "🌱 Thank you for using the Sustainable Packaging Consultant! Have a green day! 🌎"
+            log_message = {"info": "User ended chat", "slots": slots}
+            # Log in Datei schreiben
+            agent.log_writer.write(log_message)
             return ChatResponse(
                 response=goodbye_text,
-                log_message={"info": "User ended chat with goodbye message."}
+                log_message=log_message
             )
 
         response, is_loading, log_message, roadmap = agent.get_response(
@@ -65,16 +74,18 @@ async def chat(chat_message: ChatMessage):
             docs,
             generate_roadmap=chat_message.generate_roadmap
         )
+        # zieh Dir hier den aktuellen Slot‐State aus dem Agenten
+        log_message["slots"] = {
+            k: (v if v is not None else "")
+            for k, v in agent.slots.slots.items()
+        }
 
+        # Loggen
+        if hasattr(agent, "log_writer"):
+            agent.log_writer.write(log_message)
         # If roadmap is still generating, override response with loading message
         if is_loading:
             response = "🛠️ Roadmap is being created... This might take a moment ⏳"
-
-        print("DEBUG: Sending response:", {
-            "response": response,
-            "is_loading": is_loading,
-            "log_message": log_message
-        })
 
         return ChatResponse(
             response=response,
