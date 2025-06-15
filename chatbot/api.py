@@ -38,6 +38,8 @@ class ChatResponse(BaseModel):
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(chat_message: ChatMessage):
+
+    # later for the form questionnaire
     slots = chat_message.slots or {}
     try:
         user_message = chat_message.message.strip().lower()
