@@ -25,17 +25,17 @@ from typing import Optional
 class ChatMessage(BaseModel):
     message: str
     chat_history: List[str] = []
-    generate_roadmap: Optional[bool] = False  # default False
+    generate_roadmap: Optional[bool] = False
 
 class ChatResponse(BaseModel):
     response: str
-    is_loading: bool = False
+    is_loading: bool = False  # default False
     log_message: Dict[str, Any]
-    roadmap: Optional[List[str]] = None  # ✅ Add this
-
+    roadmap: Optional[List[str]] = None  
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(chat_message: ChatMessage):
+    
     # At this point consent_given is True → proceed as usual
     try:
         user_message = chat_message.message.strip().lower()
@@ -66,7 +66,10 @@ async def chat(chat_message: ChatMessage):
             generate_roadmap=chat_message.generate_roadmap
         )
 
-        # If roadmap is still generating, override response with loading message
+        if hasattr(agent, "log_writer"):
+            agent.log_writer.write(log_message)
+
+         # If roadmap is still generating, override response with loading message
         if is_loading:
             response = "🛠️ Roadmap is being created... This might take a moment ⏳"
 
@@ -80,15 +83,15 @@ async def chat(chat_message: ChatMessage):
             response=response,
             is_loading=is_loading,
             log_message=log_message,
-            roadmap=roadmap  # ✅ use actual roadmap variable
+            roadmap = roadmap
         )
-
 
     except Exception as e:
         import traceback
         traceback.print_exc()
         print("ERROR:", e)
         raise HTTPException(status_code=500, detail=str(e))
+
 
 
 if __name__ == "__main__":

@@ -88,37 +88,37 @@ BASE_URL = "https://chat-ai.academiccloud.de/v1/embeddings"
 # List of our PDFs local file paths to load and process::
 pdf_files = [
     # BSR:
-    #"./PDFs/Abfaelle_LEP_70x105_2021-04_barrierefrei_WEB.pdf",
-    #"./PDFs/BSR_Entsorgungsbilanz_2022.pdf",
-    #"./PDFs/dnk_2020_berliner_stadtreinigung_nachhaltigkeitskodex_2020.pdf",
-    #"./PDFs/Infoblatt_Mieterordner_210x297_2021-04_WEB.pdf",
+    "./PDFs/Abfaelle_LEP_70x105_2021-04_barrierefrei_WEB.pdf",
+    "./PDFs/BSR_Entsorgungsbilanz_2022.pdf",
+    "./PDFs/dnk_2020_berliner_stadtreinigung_nachhaltigkeitskodex_2020.pdf",
+    "./PDFs/Infoblatt_Mieterordner_210x297_2021-04_WEB.pdf",
 #
     ## UBA:
-    #"./PDFs/2017-03-14_texte_22-2017_bilanzierung-verpackung.pdf",
-    #"./PDFs/fachbroschuere_leitfaden_fuer_umweltgerechte_versandverpackungen_im_versa.pdf",
-    #"./PDFs/04_2025_texte.pdf",
-    #"./PDFs/35_2025_texte_bf.pdf",
-    #"./PDFs/166_2024_texte.pdf",
-    #"./PDFs/texte_16-2023_texte_sustainability_key_to_stability_security_resilience_bf.pdf",
+    "./PDFs/2017-03-14_texte_22-2017_bilanzierung-verpackung.pdf",
+    "./PDFs/fachbroschuere_leitfaden_fuer_umweltgerechte_versandverpackungen_im_versa.pdf",
+    "./PDFs/04_2025_texte.pdf",
+    "./PDFs/35_2025_texte_bf.pdf",
+    "./PDFs/166_2024_texte.pdf",
+    "./PDFs/texte_16-2023_texte_sustainability_key_to_stability_security_resilience_bf.pdf",
 #
     ## Ellen MacArthur Foundation:
-    #"./PDFs/The_new_plastics_economy_Rethinking_the_future_of_plastics.pdf",
-    #"./PDFs/reuse_revolution_scaling_returnable_packaging_study.pdf",
-    #"./PDFs/Reuse_rethinking_packaging.pdf",
-    ## "./PDFs/Flexible_Packaging_Supplementary_information.pdf",  # PDF seems to be broken
-    #"./PDFs/Impact_Report_Summary_2024.pdf",
-    #"./PDFs/Towards_the_circular_economy.pdf",
+    "./PDFs/The_new_plastics_economy_Rethinking_the_future_of_plastics.pdf",
+    "./PDFs/reuse_revolution_scaling_returnable_packaging_study.pdf",
+    "./PDFs/Reuse_rethinking_packaging.pdf",
+    # "./PDFs/Flexible_Packaging_Supplementary_information.pdf",  # PDF seems to be broken
+    "./PDFs/Impact_Report_Summary_2024.pdf",
+    "./PDFs/Towards_the_circular_economy.pdf",
 #
     ## Others: (mainly regarding sustainability FOR small businesses)
-    #"./PDFs/20171113_Small_business__big_impact_publication_ENGLISH_version.pdf",
-    #"./PDFs/becoming-a-sustainable-business-apr08.pdf",
-    #"./PDFs/giz2022-en-green-business-guide.pdf",
-    #"./PDFs/IJHLR-Volume.pdf",
-    #"./PDFs/IJSRA-2024-2500.pdf",
-    #"./PDFs/LouckMartensandChoSAMPJ2010.pdf",
-    #"./PDFs/Small-Business-Britain-Small-Business-Green-Growth.pdf",
-    ## "./PDFs/SME-EnterPRIZE-White-Paper.pdf",  # PDF seems to be broken
-    #"./PDFs/Sustainability_Practices_in_Small_Business_Venture.pdf",
+    "./PDFs/20171113_Small_business__big_impact_publication_ENGLISH_version.pdf",
+    "./PDFs/becoming-a-sustainable-business-apr08.pdf",
+    "./PDFs/giz2022-en-green-business-guide.pdf",
+    "./PDFs/IJHLR-Volume.pdf",
+    "./PDFs/IJSRA-2024-2500.pdf",
+    "./PDFs/LouckMartensandChoSAMPJ2010.pdf",
+    "./PDFs/Small-Business-Britain-Small-Business-Green-Growth.pdf",
+    # "./PDFs/SME-EnterPRIZE-White-Paper.pdf",  # PDF seems to be broken
+    "./PDFs/Sustainability_Practices_in_Small_Business_Venture.pdf",
 ]#
 
 #Load all PDFs and convert them into LangChain documents:
@@ -244,9 +244,18 @@ class SustainabilityConsultant:
 
     def generate_greeting(self) -> str:
         return (
-            "Hello! I'm your sustainability consultant. I help small businesses find eco-friendly packaging solutions. "
-            "To start off, could you tell me what your business's main product is?"
+            "Hello! I'm your sustainability consultant ♻️. I help small businesses find eco-friendly packaging solutions 📦.\n\n___\n\nTo provide you with a roadmap that helps you become more sustainable and is tailored to your current business situation, I’ll ask around 10 questions. Please take a moment to read the following instructions so you know how everything works:\n\n"
+            "• Settle in and answer everything thoroughly for the best results. This should take no more than ten minutes. ☕️\n\n"
+            "• Once we’ve collected all the necessary information, I’ll present a summary so you can review it and let me know if anything needs correcting.\n\n"
+            "• You can also ask for a summary of the collected data at any time.\n\n"
+            "• If you prefer not to share certain information, just type “none.” If you don’t know the answer, simply tell me or type “idk.” It’s not a problem! 😊\n\n"
+            "• If anything in the roadmap is unclear or you’d like more information, feel free to ask.\n\n"
+            "• If I’m unable to understand your message, even after you’ve tried rephrasing it a few times, feel free to type “none” to skip to the next question. You’ll be able to modify your answers once the summary is shown. (Since I’m still learning, this might happen occasionally, but don’t worry, we’ll still generate a reliable roadmap based on the information I do understand. 📚)\n\n"
+            "• And if you wish to end the conversation, you’re free to do so at any time.\n\n"
+            "➡️ To start off, could you tell me what your business’s main product is? ✏️📋"
         )
+
+
 
     
     def __init__(self):
@@ -592,7 +601,6 @@ Question:"""
         log_message = {"user_message": user_message, "bot_response": checklist}
         return checklist, is_loading, log_message, None
 
-
     
     def get_consultation_response(self, user_question: str, index, docs) -> str:
         """Generate consultation response using retrieved context"""
@@ -718,6 +726,7 @@ Question:"""
         summary = self.llm.invoke(prompt)
         return summary.content if hasattr(summary, "content") else str(summary)
 
+
     def get_response(self, user_question: str, chat_history: list, index, docs, generate_roadmap: bool = False) -> tuple[str, bool, dict, list | None]:
 
 
@@ -744,13 +753,13 @@ Question:"""
                 self.state = self.STATE_SLOT_FILLING
         
         # If all slots are filled, move to consultation
-        '''if self.slots.is_complete():
+        if self.slots.is_complete():
             self.state = self.STATE_CONSULTATION
-        '''
+        
         # Allow transition if at least SOME useful info is gathered
-        filled_slots = [k for k, v in self.slots.slots.items() if v]
-        if len(filled_slots) >= 3:  # You can adjust the threshold
-            self.state = self.STATE_CONSULTATION
+        #filled_slots = [k for k, v in self.slots.slots.items() if v]
+        #if len(filled_slots) >= 3:  # You can adjust the threshold
+        #    self.state = self.STATE_CONSULTATION
 
         # Generate response based on state
         if self.state == self.STATE_GREETING:
@@ -836,7 +845,6 @@ Question:"""
                 "slots": {k: v if v is not None else "" for k, v in self.slots.slots.items()}
             }
             return response, is_loading, log_message, None
-
 
 def main():
     """Main application loop"""
