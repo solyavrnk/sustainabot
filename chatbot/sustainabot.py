@@ -13,7 +13,7 @@ from langchain_core.prompts import PromptTemplate
 from langchain_core.outputs import LLMResult
 
 from langchain_openai import ChatOpenAI
-from langchain_huggingface import HuggingFaceEndpoint
+#from langchain_huggingface import HuggingFaceEndpoint
 from dotenv import load_dotenv
 
 from packaging_slots import PackagingSlots
@@ -87,39 +87,42 @@ BASE_URL = "https://chat-ai.academiccloud.de/v1/embeddings"
 
 # List of our PDFs local file paths to load and process::
 pdf_files = [
-#    # BSR:
-#    "./PDFs/Abfaelle_LEP_70x105_2021-04_barrierefrei_WEB.pdf",
-#    "./PDFs/BSR_Entsorgungsbilanz_2022.pdf",
-#    "./PDFs/dnk_2020_berliner_stadtreinigung_nachhaltigkeitskodex_2020.pdf",
-#    "./PDFs/Infoblatt_Mieterordner_210x297_2021-04_WEB.pdf",
-##
-#    ## UBA:
-#    "./PDFs/2017-03-14_texte_22-2017_bilanzierung-verpackung.pdf",
-#    "./PDFs/fachbroschuere_leitfaden_fuer_umweltgerechte_versandverpackungen_im_versa.pdf",
-#    "./PDFs/04_2025_texte.pdf",
-#    "./PDFs/35_2025_texte_bf.pdf",
-#    "./PDFs/166_2024_texte.pdf",
-#    "./PDFs/texte_16-2023_texte_sustainability_key_to_stability_security_resilience_bf.pdf",
-##
-#    ## Ellen MacArthur Foundation:
-#    "./PDFs/The_new_plastics_economy_Rethinking_the_future_of_plastics.pdf",
-#    "./PDFs/reuse_revolution_scaling_returnable_packaging_study.pdf",
-#    "./PDFs/Reuse_rethinking_packaging.pdf",
-#    # "./PDFs/Flexible_Packaging_Supplementary_information.pdf",  # PDF seems to be broken
-#    "./PDFs/Impact_Report_Summary_2024.pdf",
-#    "./PDFs/Towards_the_circular_economy.pdf",
-##
-#    ## Others: (mainly regarding sustainability FOR small businesses)
-#    "./PDFs/20171113_Small_business__big_impact_publication_ENGLISH_version.pdf",
-#    "./PDFs/becoming-a-sustainable-business-apr08.pdf",
-#    "./PDFs/giz2022-en-green-business-guide.pdf",
-#    "./PDFs/IJHLR-Volume.pdf",
-#    "./PDFs/IJSRA-2024-2500.pdf",
-#    "./PDFs/LouckMartensandChoSAMPJ2010.pdf",
-#    "./PDFs/Small-Business-Britain-Small-Business-Green-Growth.pdf",
-#    # "./PDFs/SME-EnterPRIZE-White-Paper.pdf",  # PDF seems to be broken
-#    "./PDFs/Sustainability_Practices_in_Small_Business_Venture.pdf",
-]#
+
+
+     # BSR:
+    "./PDFs/Abfaelle_LEP_70x105_2021-04_barrierefrei_WEB.pdf",
+    "./PDFs/BSR_Entsorgungsbilanz_2022.pdf",
+    "./PDFs/dnk_2020_berliner_stadtreinigung_nachhaltigkeitskodex_2020.pdf",
+    "./PDFs/Infoblatt_Mieterordner_210x297_2021-04_WEB.pdf",
+#
+    ## UBA:
+    "./PDFs/2017-03-14_texte_22-2017_bilanzierung-verpackung.pdf",
+    "./PDFs/fachbroschuere_leitfaden_fuer_umweltgerechte_versandverpackungen_im_versa.pdf",
+    "./PDFs/04_2025_texte.pdf",
+    "./PDFs/35_2025_texte_bf.pdf",
+    "./PDFs/166_2024_texte.pdf",
+    "./PDFs/texte_16-2023_texte_sustainability_key_to_stability_security_resilience_bf.pdf",
+#
+    ## Ellen MacArthur Foundation:
+    "./PDFs/The_new_plastics_economy_Rethinking_the_future_of_plastics.pdf",
+    "./PDFs/reuse_revolution_scaling_returnable_packaging_study.pdf",
+    "./PDFs/Reuse_rethinking_packaging.pdf",
+    # "./PDFs/Flexible_Packaging_Supplementary_information.pdf",  # PDF seems to be broken
+    "./PDFs/Impact_Report_Summary_2024.pdf",
+    "./PDFs/Towards_the_circular_economy.pdf",
+#
+    ## Others: (mainly regarding sustainability FOR small businesses)
+    "./PDFs/20171113_Small_business__big_impact_publication_ENGLISH_version.pdf",
+    "./PDFs/becoming-a-sustainable-business-apr08.pdf",
+    "./PDFs/giz2022-en-green-business-guide.pdf",
+    "./PDFs/IJHLR-Volume.pdf",
+    "./PDFs/IJSRA-2024-2500.pdf",
+    "./PDFs/LouckMartensandChoSAMPJ2010.pdf",
+    "./PDFs/Small-Business-Britain-Small-Business-Green-Growth.pdf",
+    # "./PDFs/SME-EnterPRIZE-White-Paper.pdf",  # PDF seems to be broken
+    "./PDFs/Sustainability_Practices_in_Small_Business_Venture.pdf",
+    ]
+
 
 #Load all PDFs and convert them into LangChain documents:
 all_docs = []
@@ -301,8 +304,8 @@ class SustainabilityConsultant:
         """Creates a chain to detect if user wants a checklist, steps, or implementation plan"""
         prompt = """You are analyzing user messages to detect if they want a step-by-step checklist, implementation plan, or actionable steps.
 
-Look for various ways people ask for structured guidance:
-- Direct requests: "checklist", "steps", "plan", "roadmap", "guide"
+Look for various ways people ask for structured guidance, here are few-shots:
+- Direct requests: "checklist", "steps", "plan", "roadmap", "guide", "step by step"
 - Action-oriented: "how do I start", "what should I do", "how to implement", "where to begin"
 - Process questions: "what's the process", "walk me through", "step by step"
 - Planning language: "how to plan", "implementation", "action items", "tasks"
@@ -875,7 +878,17 @@ Question:"""
                 roadmap_items = log_data.get("roadmap") if log_data else []
                 if roadmap_items is None:
                     roadmap_items = []
-                return response_text, False, log_message, roadmap_items
+                 # Add the follow-up question to the response
+            continue_message = "\n\nIs there anything unclear or do you need help with a step-by-step solution for any of the goals? Just let me know which step you need help with!"
+            response_text += continue_message
+            if self.wants_checklist(user_question):
+                result = self.generate_goal_checklist(user_question, index, docs)
+                if len(result) == 3:
+                    # If only 3 values returned, add None for roadmap
+                    return (*result, None)
+                else:
+                    return result
+            return response_text, False, log_message, roadmap_items
 
         else:
             response = "I'm not sure how to help. Could you please rephrase your question?"
