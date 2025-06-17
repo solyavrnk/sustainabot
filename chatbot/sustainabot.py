@@ -13,7 +13,7 @@ from langchain_core.prompts import PromptTemplate
 from langchain_core.outputs import LLMResult
 
 from langchain_openai import ChatOpenAI
-from langchain_huggingface import HuggingFaceEndpoint
+#from langchain_huggingface import HuggingFaceEndpoint
 from dotenv import load_dotenv
 
 from packaging_slots import PackagingSlots
@@ -87,7 +87,9 @@ BASE_URL = "https://chat-ai.academiccloud.de/v1/embeddings"
 
 # List of our PDFs local file paths to load and process::
 pdf_files = [
-    # BSR:
+
+
+     # BSR:
     "./PDFs/Abfaelle_LEP_70x105_2021-04_barrierefrei_WEB.pdf",
     "./PDFs/BSR_Entsorgungsbilanz_2022.pdf",
     "./PDFs/dnk_2020_berliner_stadtreinigung_nachhaltigkeitskodex_2020.pdf",
@@ -119,7 +121,8 @@ pdf_files = [
     "./PDFs/Small-Business-Britain-Small-Business-Green-Growth.pdf",
     # "./PDFs/SME-EnterPRIZE-White-Paper.pdf",  # PDF seems to be broken
     "./PDFs/Sustainability_Practices_in_Small_Business_Venture.pdf",
-]#
+    ]
+
 
 #Load all PDFs and convert them into LangChain documents:
 all_docs = []
@@ -294,8 +297,8 @@ class SustainabilityConsultant:
         """Creates a chain to detect if user wants a checklist, steps, or implementation plan"""
         prompt = """You are analyzing user messages to detect if they want a step-by-step checklist, implementation plan, or actionable steps.
 
-Look for various ways people ask for structured guidance:
-- Direct requests: "checklist", "steps", "plan", "roadmap", "guide"
+Look for various ways people ask for structured guidance, here are few-shots:
+- Direct requests: "checklist", "steps", "plan", "roadmap", "guide", "step by step"
 - Action-oriented: "how do I start", "what should I do", "how to implement", "where to begin"
 - Process questions: "what's the process", "walk me through", "step by step"
 - Planning language: "how to plan", "implementation", "action items", "tasks"
@@ -834,7 +837,17 @@ Question:"""
                 roadmap_items = log_data.get("roadmap") if log_data else []
                 if roadmap_items is None:
                     roadmap_items = []
-                return response_text, False, log_message, roadmap_items
+                 # Add the follow-up question to the response
+            continue_message = "\n\nIs there anything unclear or do you need help with a step-by-step solution for any of the goals? Just let me know which step you need help with!"
+            response_text += continue_message
+            if self.wants_checklist(user_question):
+                result = self.generate_goal_checklist(user_question, index, docs)
+                if len(result) == 3:
+                    # If only 3 values returned, add None for roadmap
+                    return (*result, None)
+                else:
+                    return result
+            return response_text, False, log_message, roadmap_items
 
         else:
             response = "I'm not sure how to help. Could you please rephrase your question?"
