@@ -714,28 +714,46 @@ Question:"""
         #return response
         return roadmap_response, False, {"info": "Generated consultation and roadmap"}
     
-    def wrap_up_prompt(self): #Generate a summary prompt using the latest slot values from the conversation log.
+    def wrap_up_prompt(self):
+        """Liest die zuletzt bekannten Slot-Werte aus der conversation.jsonp-Datei und erzeugt eine Zusammenfassung."""
         try:
-            lines = get_conversation_lines()
-            last_entry = json.loads(lines[-1]) if lines else {}
-            slots = last_entry.get("slots", {}) if last_entry else self.slots.slots
+            with open("conversation.jsonp", "r", encoding="utf-8") as f:
+                content = f.read()
+
+            # Zerlege in mögliche JSON-Objekte anhand von Start-Zeilen
+            raw_blocks = content.split('\n{')
+            json_blocks = ['{' + block if not block.startswith('{') else block for block in raw_blocks]
+            json_blocks = [block.strip() for block in json_blocks if block.strip()]
+
+            slots = {}
+
+            for block in reversed(json_blocks):
+                try:
+                    entry = json.loads(block)
+                    if "slots" in entry and isinstance(entry["slots"], dict) and any(entry["slots"].values()):
+                        slots = entry["slots"]
+                        break
+                except json.JSONDecodeError:
+                    continue 
+
         except Exception as e:
-            slots = self.slots.slots
+                slots = self.slots.slots
 
-        summary_parts = []
-        summary_parts.append(f"**Main product:** {slots.get('main_product', '')}")
-        summary_parts.append(f"**Product packaging:** {slots.get('product_packaging', '')}")
-        summary_parts.append(f"**Packaging material:** {slots.get('packaging_material', '')}")
-        summary_parts.append(f"**Packaging reorder interval:** {slots.get('packaging_reorder_interval', '')}")
-        summary_parts.append(f"**Packaging cost per order:** {slots.get('packaging_cost_per_order', '')}")
-        summary_parts.append(f"**Packaging provider:** {slots.get('packaging_provider', '')}")
-        summary_parts.append(f"**Packaging budget:** {slots.get('packaging_budget', '')}")
-        summary_parts.append(f"**Production location:** {slots.get('production_location', '')}")
-        summary_parts.append(f"**Shipping location:** {slots.get('shipping_location', '')}")
-        summary_parts.append(f"**Sustainability goals:** {slots.get('sustainability_goals', '')}")
-        summary_parts.append("We'll now help you align your packaging strategy with these inputs. 🌱")
+        # Zusammenfassung erzeugen
+        summary_parts = [
+            f"📦 **Main product:** {slots.get('main_product', 'Not provided')}",
+            f"🎁 **Product packaging:** {slots.get('product_packaging', 'Not provided')}",
+            f"🧱 **Packaging material:** {slots.get('packaging_material', 'Not provided')}",
+            f"♻️ **Reorder interval:** {slots.get('packaging_reorder_interval', 'Not provided')}",
+            f"💶 **Cost per order:** {slots.get('packaging_cost_per_order', 'Not provided')}",
+            f"🏭 **Packaging provider:** {slots.get('packaging_provider', 'Not provided')}",
+            f"💰 **Budget:** {slots.get('packaging_budget', 'Not provided')}",
+            f"🌍 **Production location:** {slots.get('production_location', 'Not provided')}",
+            f"🚚 **Shipping location:** {slots.get('shipping_location', 'Not provided')}",
+            f"🌱 **Sustainability goals:** {slots.get('sustainability_goals', 'Not provided')}",
+        ]
 
-        return "\n".join(summary_parts)
+        return "Here's a summary of the information so far:\n\n" + "\n".join(line + "  " for line in summary_parts)
 
 
 
@@ -747,7 +765,7 @@ Question:"""
         # Classify user intent
         intent = self.slot_classifier.invoke({"user_message": user_question}).strip().lower() #Greeting, providing info etc.
 
-        if any(word in user_question.lower() for word in ["summary", "summarize", "zusammenfassung"]):
+        if any(word in user_question.lower() for word in ["summary", "summarize"]):
             summary_prompt = self.wrap_up_prompt()  # Generate the summary prompt
             response = summary_prompt  # Use the generated summary prompt directly as the response
             is_loading = False
@@ -916,6 +934,8 @@ def main():
         user_message = input("\n💬 You: ")
          
         if consultant.is_goodbye_message(user_message):
+            if any(word in user_message.lower() for word in ["summary", "summarize", "zusammenfassung"]):
+                return False
             print("\n🌱 Thank you for using the Sustainable Packaging Consultant! Have a green day! 🌎")
             break
         
