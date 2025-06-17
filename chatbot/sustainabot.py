@@ -233,6 +233,13 @@ def search_index(index, query_vector: np.ndarray, k=5):
 
 ########## End of Data Binding ##########
 
+def get_conversation_lines(): #for using the current conversation history
+    if os.path.exists("conversation.jsonp"):
+        with open("conversation.jsonp", encoding="utf-8") as f:
+            return f.read().strip().split('\n')
+    else:
+        return []
+
 class SustainabilityConsultant:
     """Main consultant class with slot-filling capabilities"""
     
@@ -347,6 +354,8 @@ Answer:"""
         return chain
     def is_goodbye_message(self, user_message: str) -> bool:
         """Check if user message indicates they want to end the conversation"""
+        if any(word in user_message.lower() for word in ["summary", "summarize"]):
+                return False
         try:
             result = self.goodbye_detector.invoke({"user_message": user_message})
             return result.strip().upper() == "YES"
@@ -704,27 +713,30 @@ Question:"""
 
         #return response
         return roadmap_response, False, {"info": "Generated consultation and roadmap"}
+    
+    def wrap_up_prompt(self): #Generate a summary prompt using the latest slot values from the conversation log.
+        try:
+            lines = get_conversation_lines()
+            last_entry = json.loads(lines[-1]) if lines else {}
+            slots = last_entry.get("slots", {}) if last_entry else self.slots.slots
+        except Exception as e:
+            slots = self.slots.slots
 
+        summary_parts = []
+        summary_parts.append(f"**Main product:** {slots.get('main_product', '')}")
+        summary_parts.append(f"**Product packaging:** {slots.get('product_packaging', '')}")
+        summary_parts.append(f"**Packaging material:** {slots.get('packaging_material', '')}")
+        summary_parts.append(f"**Packaging reorder interval:** {slots.get('packaging_reorder_interval', '')}")
+        summary_parts.append(f"**Packaging cost per order:** {slots.get('packaging_cost_per_order', '')}")
+        summary_parts.append(f"**Packaging provider:** {slots.get('packaging_provider', '')}")
+        summary_parts.append(f"**Packaging budget:** {slots.get('packaging_budget', '')}")
+        summary_parts.append(f"**Production location:** {slots.get('production_location', '')}")
+        summary_parts.append(f"**Shipping location:** {slots.get('shipping_location', '')}")
+        summary_parts.append(f"**Sustainability goals:** {slots.get('sustainability_goals', '')}")
+        summary_parts.append("We'll now help you align your packaging strategy with these inputs. 🌱")
 
-    def generate_wrap_up_summary(self) -> str:
-        """Generate a summary 4-6 sentences of the user's current situation based on filled slots."""
-        slots = self.slots.slots
-        prompt = (
-            "Based on the user's inputs, summarize their current situation.\n"
-            f"Main Product: {slots.get('main_product', '')}\n"
-            f"Product Packaging: {slots.get('product_packaging', '')}\n"
-            f"Packaging Material: {slots.get('packaging_material', '')}\n"
-            f"Packaging Reorder Interval: {slots.get('packaging_reorder_interval', '')}\n"
-            f"Packaging Cost Per Order: {slots.get('packaging_cost_per_order', '')}\n"
-            f"Packaging Provider: {slots.get('packaging_provider', '')}\n"
-            f"Packaging Budget: {slots.get('packaging_budget', '')}\n"
-            f"Production Location: {slots.get('production_location', '')}\n"
-            f"Shipping Location: {slots.get('shipping_location', '')}\n"
-            f"Sustainability Goals: {slots.get('sustainability_goals', '')}\n"
-            "\nCreate a short summary (4-6 sentences)."
-        )
-        summary = self.llm.invoke(prompt)
-        return summary.content if hasattr(summary, "content") else str(summary)
+        return "\n".join(summary_parts)
+
 
 
     def get_response(self, user_question: str, chat_history: list, index, docs, generate_roadmap: bool = False) -> tuple[str, bool, dict, list | None]:
@@ -734,6 +746,17 @@ Question:"""
         
         # Classify user intent
         intent = self.slot_classifier.invoke({"user_message": user_question}).strip().lower() #Greeting, providing info etc.
+
+        if any(word in user_question.lower() for word in ["summary", "summarize", "zusammenfassung"]):
+            summary_prompt = self.wrap_up_prompt()  # Generate the summary prompt
+            response = summary_prompt  # Use the generated summary prompt directly as the response
+            is_loading = False
+            log_message = {
+                "user_message": user_question,
+                "bot_response": response,
+                "slots": {k: v if v is not None else "" for k, v in self.slots.slots.items()}
+            }
+            return response, is_loading, log_message, None
         
         # Extract slots from message
         extraction_result = self.extract_slots_from_message(user_question) 
