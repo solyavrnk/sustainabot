@@ -18,7 +18,7 @@ app.add_middleware(
 )
 
 # Dictionary für Session-spezifische Agenten
-session_agents: Dict[str, AnimalAgent] = {}
+session_agents: Dict[str, SustainabilityConsultant] = {}
 
 # Load FAISS index and docs ONCE for the API process
 index, docs = load_faiss_index_and_docs()
@@ -43,12 +43,13 @@ async def chat(chat_message: ChatMessage):
     
     # Prüfen ob eine Session-ID existiert, sonst neue erstellen
     if chat_message.session_id not in session_agents:
-        session_agents[chat_message.session_id] = AnimalAgent()
+        session_agents[chat_message.session_id] = SustainabilityConsultant()
         
         agent = session_agents[chat_message.session_id]
         response, log_message = agent.get_response(
             chat_message.message, 
             chat_message.chat_history
+        )
           
     # At this point consent_given is True → proceed as usual
     try:

@@ -30,7 +30,7 @@ st.set_page_config(
 
 
 # CSS für besseres Styling
-st.markdown("""
+st.markdown(
     """
 
 <style>
