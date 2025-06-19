@@ -1,6 +1,8 @@
 import streamlit as st
 import requests
 import json
+import uuid
+import os
 
 # Konfiguration der Seite
 st.set_page_config(
@@ -8,6 +10,20 @@ st.set_page_config(
     page_icon="♻️",
     layout="centered"
 )
+
+# Get API base URL from environment variable or use default
+API_BASE_URL = os.environ.get("API_BASE_URL", "http://localhost")
+API_PORT = os.environ.get("API_PORT", "8001")
+
+# Determine the correct API URL
+# If API_BASE_URL is localhost, use port 8000 (internal container communication)
+# Otherwise use the external port (for browser access from outside)
+if "localhost" in API_BASE_URL or "127.0.0.1" in API_BASE_URL:
+    API_URL = f"{API_BASE_URL}:8000/chat"
+else:
+    API_URL = f"{API_BASE_URL}:{API_PORT}/chat"
+
+print(f"API_URL: {API_URL}")
 
 st.markdown("""
 <style>
@@ -96,14 +112,19 @@ else:
         st.session_state.input_key = 0
         st.session_state.is_loading = False
         st.session_state.is_creating_roadmap = False  # NEW: track roadmap generation state
+        
+        if "session_id" not in st.session_state:
+            st.session_state.session_id = str(uuid.uuid4())
+
         # Initial bot greeting
         try:
             response = requests.post(
-                "http://localhost:8000/chat",
+                API_URL,
                 json={
                     "message": st.session_state.last_input,
                     "chat_history": [msg["content"] for msg in st.session_state.messages],
-                    "generate_roadmap": st.session_state.is_creating_roadmap  # ✅ add this
+                    "generate_roadmap": st.session_state.is_creating_roadmap,
+                    "session_id": st.session_state.session_id
                 }
             )
             response_data = response.json()
@@ -155,15 +176,19 @@ else:
             st.session_state.messages.append({"role": "user", "content": user_input})
             st.experimental_rerun()  
 
+            if "session_id" not in st.session_state:
+                st.session_state.session_id = str(uuid.uuid4())
+
 
     if st.session_state.is_loading:
         try:
             response = requests.post(
-                "http://localhost:8000/chat",
+                API_URL,
                 json={
                     "message": st.session_state.last_input,
                     "chat_history": [msg["content"] for msg in st.session_state.messages],
-                    "generate_roadmap": st.session_state.is_creating_roadmap  
+                    "generate_roadmap": st.session_state.is_creating_roadmap,
+                    "session_id": st.session_state.session_id
                 }
             )
 

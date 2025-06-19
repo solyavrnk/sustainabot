@@ -7,7 +7,6 @@ from log_writer import LogWriter
 
 app = FastAPI()
 
-
 # CORS für lokale Entwicklung
 app.add_middleware(
     CORSMiddleware,
@@ -16,6 +15,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Dictionary für Session-spezifische AgentenAdd commentMore actions
+session_agents: Dict[str, SustainabilityConsultant] = {}
 
 # Load FAISS index and docs ONCE for the API process
 index, docs = load_faiss_index_and_docs()
@@ -27,6 +29,7 @@ class ChatMessage(BaseModel):
     message: str
     chat_history: List[str] = []
     generate_roadmap: Optional[bool] = False
+    session_id: str
 
 class ChatResponse(BaseModel):
     response: str
@@ -39,6 +42,13 @@ async def chat(chat_message: ChatMessage):
     
     # At this point consent_given is True → proceed as usual
     try:
+
+         # Prüfen ob eine Session-ID existiert, sonst neue erstellen
+        if chat_message.session_id not in session_agents:
+            session_agents[chat_message.session_id] = SustainabilityConsultant()
+
+        agent = session_agents[chat_message.session_id]
+
         user_message = chat_message.message.strip().lower()
 
         # Begrüßung
