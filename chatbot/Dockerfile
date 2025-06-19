@@ -13,7 +13,8 @@ COPY chatbot/ .
 RUN useradd -m dev && \
     mkdir -p /app/data && \
     touch /app/data/chat_history.json && \
-    chown -R dev:dev /app
+    chown -R dev:dev /app && \
+    chmod +x start.sh
 
 USER dev
 
@@ -23,5 +24,5 @@ ENV PYTHONUNBUFFERED=1
 # Expose ports for FastAPI and Streamlit
 EXPOSE 8000 8501
 
-# Command to run both services
-CMD ["sh", "-c", "python api.py & streamlit run app.py --server.port=8501 --server.address=0.0.0.0"]
+# Command to run services with output redirection
+CMD ["./start.sh"]
