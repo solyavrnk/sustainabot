@@ -95,7 +95,7 @@ elif st.session_state.consent_given is False:
             """
             <h3>Consent Declined</h3>
             <p style="font-size: 19px;">
-                No problem, we respect your decision. ✌️ <br>
+                No problem, I respect your decision. ✌️ <br>
                 If you change your mind, just click the button below to get started.
             </p>
             """,
@@ -152,7 +152,7 @@ else:
             else:
                 st.markdown(f"""
                 <div class="chat-message bot">
-                    <div>🤖 <b>Bot:</b></div>
+                    <div>🤖 <b>Sustainabot:</b></div>
                     <div>{message["content"]}</div>
                 </div>
                 """, unsafe_allow_html=True)
