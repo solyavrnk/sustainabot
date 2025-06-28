@@ -254,10 +254,8 @@ class SustainabilityConsultant:
 
     def generate_greeting(self) -> str:
         return (
-            "Hello! I'm your sustainability consultant ♻️. I help small businesses find eco-friendly packaging solutions 📦.\n\n___\n\nTo provide you with a roadmap that helps you become more sustainable and is tailored to your current business situation, I’ll ask around 10 questions. Please take a moment to read the following instructions so you know how everything works:\n\n"
+            "Hello! I'm your sustainability consultant ♻️. I help small businesses find eco-friendly packaging solutions 📦.\n\n___\n\nTo provide you with a roadmap that helps you become more sustainable and is tailored to your current business situation. Please take a moment to read the following instructions so you know how everything works:\n\n"
             "• Settle in and answer everything thoroughly for the best results. This should take no more than ten minutes. ☕️\n\n"
-            "• Once we’ve collected all the necessary information, I’ll present a summary so you can review it and let me know if anything needs correcting.\n\n"
-            "• You can also ask for a summary of the collected data at any time.\n\n"
             "• If you prefer not to share certain information, just type “none.” If you don’t know the answer, simply tell me or type “idk.” It’s not a problem! 😊\n\n"
             "• If anything in the roadmap is unclear or you’d like more information, feel free to ask.\n\n"
             "• If I’m unable to understand your message, even after you’ve tried rephrasing it a few times, feel free to type “none” to skip to the next question. You’ll be able to modify your answers once the summary is shown. (Since I’m still learning, this might happen occasionally, but don’t worry, we’ll still generate a reliable roadmap based on the information I do understand. 📚)\n\n"
@@ -296,7 +294,7 @@ class SustainabilityConsultant:
         self.question_generator = self.create_question_generator()
         self.consultation_chain = self.create_consultation_chain()
         self.goal_extractor = self.create_goal_extractor()
-        self.plan_generator = self.create_implementation_plan_generator()
+        #self.plan_generator = self.create_implementation_plan_generator()
         self.goodbye_detector = self.goodbye_detector()  
         self.checklist_intent_detector = self.create_checklist_intent_detector()       
         self.log_writer = LogWriter()
@@ -345,6 +343,9 @@ Look for various ways people say goodbye including:
 - Appreciation + ending: "thanks for everything", "you've been helpful"
 - Different languages: "auf wiedersehen", "au revoir", "ciao", "adios"
 
+DO NOT END THE CONVERSATION  if the user is talking about how odten he reoorders pacakging:
+e.q. when the user send a mensage with "once a month", "every 2 weeks", "quarterly", "monthly", "every week" or similar.
+
 Respond with ONLY "YES" if the user wants to end the conversation, or "NO" if they want to continue.
 
 Be generous in detecting goodbye intent - if there's any indication they want to end the conversation, respond with "YES".
@@ -376,17 +377,18 @@ Extract the following information if present:
 1. Main product (what is your business's main product?)
 2. Product packaging (what do you use to package one item of your product and get it ready for shipping/delivery)
 3. Packaging material (which material is it? e.g., paper, organic, metal, glass, composite)
-4. Packaging reorder interval (how often you reorder packaging, e.g., monthly, quarterly)
+4. Packaging reorder interval (how often you reorder packaging, e.g., monthly, quarterly, every month, every week, once a month, every 2 weeks)
 5. Packaging cost per order (how much do you pay for the packaging per order? Prices, costs, amounts with currency, in EUR)
 6. Packaging provider (who is your current supplier or provider?)
 7. Packaging budget (look for budget, total amount available, spending limit)
 8. Production location (in which country and city do you operate or produce? Country names, locations, "we are in", "based in")
-9. Shipping location (where do you ship your product? Country names, locations)
+9. Shipping location (where do you ship your product? Country names, locations) It can be the same as the production location.
 10. Sustainability goals (do you need help with a packaging sustainability goal or want ideas?)
 
 Rules:
 - Only extract information that is explicitly mentioned
-- For prices/budgets: extract numbers with currency (convert to EUR if possible)
+- For prices/budgets: extract numbers with or without currency (convert to EUR if possible).
+- For packaging reorder: extract anything that indicates frequency (e.g., "monthly", "every 2 weeks", "quarterly", "once a month")
 - For country: extract the specific country name
 - If information is not present, respond with "NOT_FOUND"
 - Be conservative - only extract if you're confident
@@ -575,7 +577,7 @@ Question:"""
         chain = PromptTemplate.from_template(prompt) | self.extractor_llm | StrOutputParser()
         return chain
     
-    def create_implementation_plan_generator(self):
+    '''def create_implementation_plan_generator(self):
         prompt = """You are an expert in sustainable packaging for small businesses.
 
         Given the user's goal:
@@ -588,7 +590,7 @@ Question:"""
 
         Checklist:"""
         chain = PromptTemplate.from_template(prompt) | self.llm | StrOutputParser()
-        return chain
+        return chain'''
 
     def generate_goal_checklist(self, user_message: str, index, docs) -> tuple[str, bool, dict, None]:
         goal = self.goal_extractor.invoke({"user_message": user_message}).strip()
