@@ -11,6 +11,7 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain.callbacks.base import BaseCallbackHandler
 from langchain_core.prompts import PromptTemplate
 from langchain_core.outputs import LLMResult
+from transitions import Machine
 
 from langchain_openai import ChatOpenAI
 #from langchain_huggingface import HuggingFaceEndpoint
@@ -236,16 +237,10 @@ def search_index(index, query_vector: np.ndarray, k=5):
 
 ########## End of Data Binding ##########
 
-def get_conversation_lines(): #for using the current conversation history
-    if os.path.exists("conversation.jsonp"):
-        with open("conversation.jsonp", encoding="utf-8") as f:
-            return f.read().strip().split('\n')
-    else:
-        return []
-
 class SustainabilityConsultant:
     """Main consultant class with slot-filling capabilities"""
-    
+    states = ['greeting', 'slot_filling', 'consultation', 'end']
+
     STATE_GREETING = "greeting"
     STATE_SLOT_FILLING = "slot_filling"
     STATE_CONSULTATION = "consultation"
@@ -254,8 +249,10 @@ class SustainabilityConsultant:
 
     def generate_greeting(self) -> str:
         return (
-            "Hello! I'm your sustainability consultant ♻️. I help small businesses find eco-friendly packaging solutions 📦.\n\n___\n\nTo provide you with a roadmap that helps you become more sustainable and is tailored to your current business situation. Please take a moment to read the following instructions so you know how everything works:\n\n"
+            "Hello! I'm your sustainability consultant ♻️. I help small businesses find eco-friendly packaging solutions 📦.\n\n___\n\nTo provide you with a roadmap that helps you become more sustainable and is tailored to your current business situation, I’ll ask around 10 questions. Please take a moment to read the following instructions so you know how everything works:\n\n"
             "• Settle in and answer everything thoroughly for the best results. This should take no more than ten minutes. ☕️\n\n"
+            "• Once we’ve collected all the necessary information, I’ll present a summary so you can review it and let me know if anything needs correcting.\n\n"
+            "• You can also ask for a summary of the collected data at any time.\n\n"
             "• If you prefer not to share certain information, just type “none.” If you don’t know the answer, simply tell me or type “idk.” It’s not a problem! 😊\n\n"
             "• If anything in the roadmap is unclear or you’d like more information, feel free to ask.\n\n"
             "• If I’m unable to understand your message, even after you’ve tried rephrasing it a few times, feel free to type “none” to skip to the next question. You’ll be able to modify your answers once the summary is shown. (Since I’m still learning, this might happen occasionally, but don’t worry, we’ll still generate a reliable roadmap based on the information I do understand. 📚)\n\n"
@@ -268,6 +265,14 @@ class SustainabilityConsultant:
     
     def __init__(self):
         # Initialize LLM
+        self.machine = Machine(model=self, states=self.states, initial='greeting')
+        
+        # Define transitions
+        self.machine.add_transition('start_filling', 'greeting', 'slot_filling')
+        self.machine.add_transition('complete_filling', 'slot_filling', 'consultation')
+        self.machine.add_transition('continue_consultation', 'consultation', 'consultation')
+        self.machine.add_transition('end_session', '*', 'end')
+
         self.llm = ChatOpenAI(
             model="mistral-large-instruct",
             temperature=0.3,
@@ -283,7 +288,7 @@ class SustainabilityConsultant:
             base_url="https://chat-ai.academiccloud.de/v1",
         )
         
-        self.state = self.STATE_GREETING
+    
         self.slots = PackagingSlots()
         self.current_slot = None
 
@@ -294,10 +299,20 @@ class SustainabilityConsultant:
         self.question_generator = self.create_question_generator()
         self.consultation_chain = self.create_consultation_chain()
         self.goal_extractor = self.create_goal_extractor()
-        #self.plan_generator = self.create_implementation_plan_generator()
+        self.plan_generator = self.create_implementation_plan_generator()
         self.goodbye_detector = self.goodbye_detector()  
         self.checklist_intent_detector = self.create_checklist_intent_detector()       
         self.log_writer = LogWriter()
+     
+    def should_transition_to_slot_filling(self, intent: str, extraction_result: dict) -> bool:
+        """Determine if we should move from greeting to slot filling"""
+        return (self.state == self.STATE_GREETING and 
+                (intent in ["providing_info", "asking_question"] or extraction_result["updated_slots"]))
+
+    def should_transition_to_consultation(self) -> bool:
+        """Determine if we should move from slot filling to consultation"""
+        return (self.state == self.STATE_SLOT_FILLING and self.slots.is_complete())
+
     def create_checklist_intent_detector(self):
         """Creates a chain to detect if user wants a checklist, steps, or implementation plan"""
         prompt = """You are analyzing user messages to detect if they want a step-by-step checklist, implementation plan, or actionable steps.
@@ -343,12 +358,7 @@ Look for various ways people say goodbye including:
 - Appreciation + ending: "thanks for everything", "you've been helpful"
 - Different languages: "auf wiedersehen", "au revoir", "ciao", "adios"
 
-DO NOT END THE CONVERSATION  if the user is talking about how odten he reoorders pacakging:
-e.q. when the user send a mensage with "once a month", "every 2 weeks", "quarterly", "monthly", "every week" or similar.
-
-Respond with ONLY "YES" if the user wants to end the conversation, or "NO" if they want to continue.
-
-Be generous in detecting goodbye intent - if there's any indication they want to end the conversation, respond with "YES".
+Respond with ONLY "YES" if the user really wants to end the conversation, or "NO" if they want to continue.
 
 User message: {user_message}
 
@@ -358,8 +368,6 @@ Answer:"""
         return chain
     def is_goodbye_message(self, user_message: str) -> bool:
         """Check if user message indicates they want to end the conversation"""
-        if any(word in user_message.lower() for word in ["summary", "summarize"]):
-                return False
         try:
             result = self.goodbye_detector.invoke({"user_message": user_message})
             return result.strip().upper() == "YES"
@@ -377,18 +385,17 @@ Extract the following information if present:
 1. Main product (what is your business's main product?)
 2. Product packaging (what do you use to package one item of your product and get it ready for shipping/delivery)
 3. Packaging material (which material is it? e.g., paper, organic, metal, glass, composite)
-4. Packaging reorder interval (how often you reorder packaging, e.g., monthly, quarterly, every month, every week, once a month, every 2 weeks)
+4. Packaging reorder interval (how often you reorder packaging, e.g., monthly, quarterly)
 5. Packaging cost per order (how much do you pay for the packaging per order? Prices, costs, amounts with currency, in EUR)
 6. Packaging provider (who is your current supplier or provider?)
 7. Packaging budget (look for budget, total amount available, spending limit)
 8. Production location (in which country and city do you operate or produce? Country names, locations, "we are in", "based in")
-9. Shipping location (where do you ship your product? Country names, locations) It can be the same as the production location.
+9. Shipping location (where do you ship your product? Country names, locations)
 10. Sustainability goals (do you need help with a packaging sustainability goal or want ideas?)
 
 Rules:
 - Only extract information that is explicitly mentioned
-- For prices/budgets: extract numbers with or without currency (convert to EUR if possible).
-- For packaging reorder: extract anything that indicates frequency (e.g., "monthly", "every 2 weeks", "quarterly", "once a month")
+- For prices/budgets: extract numbers with currency (convert to EUR if possible)
 - For country: extract the specific country name
 - If information is not present, respond with "NOT_FOUND"
 - Be conservative - only extract if you're confident
@@ -577,7 +584,7 @@ Question:"""
         chain = PromptTemplate.from_template(prompt) | self.extractor_llm | StrOutputParser()
         return chain
     
-    '''def create_implementation_plan_generator(self):
+    def create_implementation_plan_generator(self):
         prompt = """You are an expert in sustainable packaging for small businesses.
 
         Given the user's goal:
@@ -590,7 +597,7 @@ Question:"""
 
         Checklist:"""
         chain = PromptTemplate.from_template(prompt) | self.llm | StrOutputParser()
-        return chain'''
+        return chain
 
     def generate_goal_checklist(self, user_message: str, index, docs) -> tuple[str, bool, dict, None]:
         goal = self.goal_extractor.invoke({"user_message": user_message}).strip()
@@ -718,68 +725,38 @@ Question:"""
 
         #return response
         return roadmap_response, False, {"info": "Generated consultation and roadmap"}
-    
-    def wrap_up_prompt(self):
-        """Liest die zuletzt bekannten Slot-Werte aus der conversation.jsonp-Datei und erzeugt eine Zusammenfassung."""
-        try:
-            with open("conversation.jsonp", "r", encoding="utf-8") as f:
-                content = f.read()
 
-            # Zerlege in mögliche JSON-Objekte anhand von Start-Zeilen
-            raw_blocks = content.split('\n{')
-            json_blocks = ['{' + block if not block.startswith('{') else block for block in raw_blocks]
-            json_blocks = [block.strip() for block in json_blocks if block.strip()]
 
-            slots = {}
-
-            for block in reversed(json_blocks):
-                try:
-                    entry = json.loads(block)
-                    if "slots" in entry and isinstance(entry["slots"], dict) and any(entry["slots"].values()):
-                        slots = entry["slots"]
-                        break
-                except json.JSONDecodeError:
-                    continue 
-
-        except Exception as e:
-                slots = self.slots.slots
-
-        # Zusammenfassung erzeugen
-        summary_parts = [
-            f"📦 **Main product:** {slots.get('main_product', 'Not provided')}",
-            f"🎁 **Product packaging:** {slots.get('product_packaging', 'Not provided')}",
-            f"🧱 **Packaging material:** {slots.get('packaging_material', 'Not provided')}",
-            f"♻️ **Reorder interval:** {slots.get('packaging_reorder_interval', 'Not provided')}",
-            f"💶 **Cost per order:** {slots.get('packaging_cost_per_order', 'Not provided')}",
-            f"🏭 **Packaging provider:** {slots.get('packaging_provider', 'Not provided')}",
-            f"💰 **Budget:** {slots.get('packaging_budget', 'Not provided')}",
-            f"🌍 **Production location:** {slots.get('production_location', 'Not provided')}",
-            f"🚚 **Shipping location:** {slots.get('shipping_location', 'Not provided')}",
-            f"🌱 **Sustainability goals:** {slots.get('sustainability_goals', 'Not provided')}",
-        ]
-
-        return "Here's a summary of the information so far:\n\n" + "\n".join(line + "  " for line in summary_parts)
-
+    def generate_wrap_up_summary(self) -> str:
+        """Generate a summary 4-6 sentences of the user's current situation based on filled slots."""
+        slots = self.slots.slots
+        prompt = (
+            "Based on the user's inputs, summarize their current situation.\n"
+            f"Main Product: {slots.get('main_product', '')}\n"
+            f"Product Packaging: {slots.get('product_packaging', '')}\n"
+            f"Packaging Material: {slots.get('packaging_material', '')}\n"
+            f"Packaging Reorder Interval: {slots.get('packaging_reorder_interval', '')}\n"
+            f"Packaging Cost Per Order: {slots.get('packaging_cost_per_order', '')}\n"
+            f"Packaging Provider: {slots.get('packaging_provider', '')}\n"
+            f"Packaging Budget: {slots.get('packaging_budget', '')}\n"
+            f"Production Location: {slots.get('production_location', '')}\n"
+            f"Shipping Location: {slots.get('shipping_location', '')}\n"
+            f"Sustainability Goals: {slots.get('sustainability_goals', '')}\n"
+            "\nCreate a short summary (4-6 sentences)."
+        )
+        summary = self.llm.invoke(prompt)
+        return summary.content if hasattr(summary, "content") else str(summary)
 
 
     def get_response(self, user_question: str, chat_history: list, index, docs, generate_roadmap: bool = False) -> tuple[str, bool, dict, list | None]:
-
-
         """Main response generation method"""
+
+        if self.is_goodbye_message(user_question):
+            self.end_session()  # Use the state machine transition
+            return "Thank you for using the Sustainable Packaging Consultant! Have a green day! 🌎", False, {}, None
         
         # Classify user intent
         intent = self.slot_classifier.invoke({"user_message": user_question}).strip().lower() #Greeting, providing info etc.
-
-        if any(word in user_question.lower() for word in ["summary", "summarize"]):
-            summary_prompt = self.wrap_up_prompt()  # Generate the summary prompt
-            response = summary_prompt  # Use the generated summary prompt directly as the response
-            is_loading = False
-            log_message = {
-                "user_message": user_question,
-                "bot_response": response,
-                "slots": {k: v if v is not None else "" for k, v in self.slots.slots.items()}
-            }
-            return response, is_loading, log_message, None
         
         # Extract slots from message
         extraction_result = self.extract_slots_from_message(user_question) 
@@ -792,7 +769,21 @@ Question:"""
             else:
                 return result
 
+        try:
+            # Transition from greeting to slot filling
+            if self.should_transition_to_slot_filling(intent, extraction_result):
+                self.start_filling()  # Use the state machine transition
+                print(f"used state logic")
+            
+            # Transition from slot filling to consultation
+            elif self.should_transition_to_consultation():
+                self.complete_filling()  # Use the state machine transition
+                print(f"used state logic")
                 
+        except Exception as e:
+            print(f"State transition error: {e}")
+            # Continue with current state if transition fails
+    
         # State management
         if self.state == self.STATE_GREETING:
             if intent in ["providing_info", "asking_question"] or extraction_result["updated_slots"]:
@@ -823,7 +814,7 @@ Question:"""
 
         
         elif self.state == self.STATE_SLOT_FILLING:
-           
+            
             # First update the current slot with the user input
             self.update_current_slot(user_question)
 
@@ -831,13 +822,13 @@ Question:"""
             extraction_result = self.extract_slots_from_message(user_question)
 
             if extraction_result["updated_slots"]:
-                ack = "Thanks for the information! "
+        
 
                 if not self.slots.is_complete():
                     question = self.generate_slot_question()
-                    response = ack + question
+                    response = question
                 else:
-                    response = ack + "Perfect! I now have all the information I need. How can I help you with sustainable packaging solutions?"
+                    response =  "Perfect! I now have all the information I need. How can I help you with sustainable packaging solutions?"
                     self.state = self.STATE_CONSULTATION
             else:
                 # No new info extracted, ask for missing slots or answer question
@@ -891,6 +882,23 @@ Question:"""
                 else:
                     return result
             return response_text, False, log_message, roadmap_items
+        
+        elif self.state == self.STATE_END:
+            # In end state, still allow some interaction
+            if self.wants_checklist(user_question):
+                result = self.generate_goal_checklist(user_question, index, docs)
+                if len(result) == 3:
+                    return (*result, None)
+                else:
+                    return result
+            
+            response = "Thank you for using the consultant! If you need further help, feel free to ask about specific steps or goals."
+            is_loading = False
+            log_message = {
+                "user_message": user_question,
+                "bot_response": response
+            }
+            return response, is_loading, log_message, None
 
         else:
             response = "I'm not sure how to help. Could you please rephrase your question?"
@@ -948,11 +956,6 @@ def main():
     while True:
         user_message = input("\n💬 You: ")
          
-        if consultant.is_goodbye_message(user_message):
-            if any(word in user_message.lower() for word in ["summary", "summarize", "zusammenfassung"]):
-                return False
-            print("\n🌱 Thank you for using the Sustainable Packaging Consultant! Have a green day! 🌎")
-            break
         
         try:
             bot_response, log_message = consultant.get_response(user_message, chat_history, index, docs)
