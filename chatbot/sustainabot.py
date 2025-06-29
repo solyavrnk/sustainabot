@@ -385,7 +385,7 @@ Extract the following information if present:
 1. Main product (what is your business's main product?)
 2. Product packaging (what do you use to package one item of your product and get it ready for shipping/delivery)
 3. Packaging material (which material is it? e.g., paper, organic, metal, glass, composite)
-4. Packaging reorder interval (how often you reorder packaging, e.g., monthly, quarterly)
+4. Packaging reorder interval (how often you reorder packaging, e.g., monthly, quarterly, every ... weeks)
 5. Packaging cost per order (how much do you pay for the packaging per order? Prices, costs, amounts with currency, in EUR)
 6. Packaging provider (who is your current supplier or provider?)
 7. Packaging budget (look for budget, total amount available, spending limit)
@@ -395,10 +395,10 @@ Extract the following information if present:
 
 Rules:
 - Only extract information that is explicitly mentioned
-- For prices/budgets: extract numbers with currency (convert to EUR if possible)
+- For prices/budgets: extract numbers with currency (convert to EUR if possible, assume euro if no currency is given)
 - For country: extract the specific country name
 - If information is not present, respond with "NOT_FOUND"
-- Be conservative - only extract if you're confident
+
 
 Format your response as JSON:
 {{
@@ -773,12 +773,11 @@ Question:"""
             # Transition from greeting to slot filling
             if self.should_transition_to_slot_filling(intent, extraction_result):
                 self.start_filling()  # Use the state machine transition
-                print(f"used state logic")
-            
+    
             # Transition from slot filling to consultation
             elif self.should_transition_to_consultation():
                 self.complete_filling()  # Use the state machine transition
-                print(f"used state logic")
+
                 
         except Exception as e:
             print(f"State transition error: {e}")
@@ -786,7 +785,7 @@ Question:"""
     
         # State management
         if self.state == self.STATE_GREETING:
-            if intent in ["providing_info", "asking_question"] or extraction_result["updated_slots"]:
+            if intent in ["providing_info"] or extraction_result["updated_slots"]:
                 self.state = self.STATE_SLOT_FILLING
         
         # If all slots are filled, move to consultation
