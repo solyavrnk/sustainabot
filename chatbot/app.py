@@ -3,6 +3,8 @@ import requests
 import json
 import uuid
 import os
+from requests.exceptions import Timeout
+
 
 # Konfiguration der Seite
 st.set_page_config(
@@ -116,7 +118,6 @@ else:
         if "session_id" not in st.session_state:
             st.session_state.session_id = str(uuid.uuid4())
 
-        # Initial bot greeting
         try:
             response = requests.post(
                 API_URL,
@@ -125,12 +126,16 @@ else:
                     "chat_history": [msg["content"] for msg in st.session_state.messages],
                     "generate_roadmap": st.session_state.is_creating_roadmap,
                     "session_id": st.session_state.session_id
-                }
+                },
+                timeout=600  # 10 min timeout
             )
             response_data = response.json()
             st.session_state.messages.append({"role": "bot", "content": response_data["response"]})
+        except Timeout:
+            st.error("The server is taking too long to respond. Please try again later.")
         except Exception as e:
             st.error(f"Fehler bei der Initialkommunikation mit dem Server: {str(e)}")
+
 
     # Titel und Beschreibung
     st.title("♻️ Sustainabot")
@@ -189,7 +194,8 @@ else:
                     "chat_history": [msg["content"] for msg in st.session_state.messages],
                     "generate_roadmap": st.session_state.is_creating_roadmap,
                     "session_id": st.session_state.session_id
-                }
+                },
+                timeout=600  # 10 min timeout
             )
 
             response_data = response.json()
@@ -216,7 +222,12 @@ else:
                 except AttributeError:
                     st.experimental_rerun()
 
-        except Exception as e:
-            st.error(f"Fehler bei der Kommunikation mit dem Server: {str(e)}")
+        except Timeout:
+            st.error("The server is taking too long to respond. Please try again later.")
             st.session_state.is_loading = False
             st.session_state.is_creating_roadmap = False
+        except Exception as e:
+            st.error(f"Error communicating with the server: {str(e)}")
+            st.session_state.is_loading = False
+            st.session_state.is_creating_roadmap = False
+

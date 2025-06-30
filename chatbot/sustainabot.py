@@ -107,7 +107,6 @@ pdf_files = [
     "./PDFs/The_new_plastics_economy_Rethinking_the_future_of_plastics.pdf",
     "./PDFs/reuse_revolution_scaling_returnable_packaging_study.pdf",
     "./PDFs/Reuse_rethinking_packaging.pdf",
-    # "./PDFs/Flexible_Packaging_Supplementary_information.pdf",  # PDF seems to be broken
     "./PDFs/Impact_Report_Summary_2024.pdf",
     "./PDFs/Towards_the_circular_economy.pdf",
 #
@@ -119,7 +118,6 @@ pdf_files = [
     "./PDFs/IJSRA-2024-2500.pdf",
     "./PDFs/LouckMartensandChoSAMPJ2010.pdf",
     "./PDFs/Small-Business-Britain-Small-Business-Green-Growth.pdf",
-    # "./PDFs/SME-EnterPRIZE-White-Paper.pdf",  # PDF seems to be broken
     "./PDFs/Sustainability_Practices_in_Small_Business_Venture.pdf",
     ]
 
@@ -138,9 +136,6 @@ print(f"Total pages loaded from PDFs: {len(all_docs)}")
 # Split large documents into smaller chunks (e.g., ~1000 chars):
 text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
 docs_split = text_splitter.split_documents(all_docs)
-
-print(f"Total document chunks after splitting: {len(docs_split)}")
-
 
 print(f"Total document chunks after splitting: {len(docs_split)}")
 
@@ -251,20 +246,17 @@ class SustainabilityConsultant:
     STATE_CONSULTATION = "consultation"
     STATE_END = "end"
 
-
     def generate_greeting(self) -> str:
         return (
-            "Hello! I'm your sustainability consultant ♻️. I help small businesses find eco-friendly packaging solutions 📦.\n\n___\n\nTo provide you with a roadmap that helps you become more sustainable and is tailored to your current business situation. Please take a moment to read the following instructions so you know how everything works:\n\n"
-            "• Settle in and answer everything thoroughly for the best results. This should take no more than ten minutes. ☕️\n\n"
-            "• If you prefer not to share certain information, just type “none.” If you don’t know the answer, simply tell me or type “idk.” It’s not a problem! 😊\n\n"
-            "• If anything in the roadmap is unclear or you’d like more information, feel free to ask.\n\n"
-            "• If I’m unable to understand your message, even after you’ve tried rephrasing it a few times, feel free to type “none” to skip to the next question. You’ll be able to modify your answers once the summary is shown. (Since I’m still learning, this might happen occasionally, but don’t worry, we’ll still generate a reliable roadmap based on the information I do understand. 📚)\n\n"
-            "• And if you wish to end the conversation, you’re free to do so at any time.\n\n"
-            "➡️ To start off, could you tell me what your business’s main product is? ✏️📋"
+            "Hi! I’m your sustainability consultant ♻️, here to help with eco-friendly packaging 📦.\n\n"
+            "I’ll generate a roadmap to help your business become more sustainable, based on a few quick questions ✏️📋.\n\n"
+            "**How to answer:**\n\n"
+            "• Type **none** if you prefer not to answer or if I don’t understand your input.\n\n"
+            "• Type **idk** or **I don't know** if you’re unsure about an answer.\n\n"
+            "• Type **summary** to see an overview of the info I’ve collected so far.\n\n"
+            "• You can end the chat at any time.\n\n"
+            "➡️ First question: What’s your business’s main product?"
         )
-
-
-
     
     def __init__(self):
         # Initialize LLM
@@ -295,6 +287,7 @@ class SustainabilityConsultant:
         self.consultation_chain = self.create_consultation_chain()
         self.goal_extractor = self.create_goal_extractor()
         #self.plan_generator = self.create_implementation_plan_generator()
+        #self.roadmap_generator = self.create_roadmap_generator()
         self.goodbye_detector = self.goodbye_detector()  
         self.checklist_intent_detector = self.create_checklist_intent_detector()       
         self.log_writer = LogWriter()
@@ -577,58 +570,19 @@ Question:"""
         chain = PromptTemplate.from_template(prompt) | self.extractor_llm | StrOutputParser()
         return chain
     
-    '''def create_implementation_plan_generator(self):
-        prompt = """You are an expert in sustainable packaging for small businesses.
-
-        Given the user's goal:
-        {goal}
-
-        And relevant information from our knowledge base:
-        {context}
-
-        Generate a **detailed, step-by-step checklist** (3–6 steps) to help the user implement their goal. Keep each step clear and actionable.
-
-        Checklist:"""
-        chain = PromptTemplate.from_template(prompt) | self.llm | StrOutputParser()
-        return chain'''
-
-    def generate_goal_checklist(self, user_message: str, index, docs) -> tuple[str, bool, dict, None]:
-        goal = self.goal_extractor.invoke({"user_message": user_message}).strip()
-        
-        if goal == "NOT_FOUND":
-            response = "I couldn't identify a clear goal in your message. Could you rephrase it?"
-            is_loading = False
-            log_message = {"user_message": user_message, "bot_response": response}
-            return response, is_loading, log_message, None
-
-        # Get relevant context from documents
-        query_vec = get_query_embedding(goal)
-        indices, _ = search_index(index, query_vec, k=5)
-        context = "\n\n".join(docs[i].page_content for i in indices)
-
-        checklist = self.plan_generator.invoke({
-            "goal": goal,
-            "context": context
-        })
-        
-        is_loading = False
-        log_message = {"user_message": user_message, "bot_response": checklist}
-        return checklist, is_loading, log_message, None
-
-    
     def get_consultation_response(self, user_question: str, index, docs) -> str:
         """Generate consultation response using retrieved context"""
 
         print("\n🛠️ Roadmap is being created...\nThis might take a moment ⏳")  
-
         # Convert User Question to Vector
         query_vec = get_query_embedding(user_question)
 
         # Search for Relevant Documents (chooses the k most similar documents)
-        indices, distances = search_index(index, query_vec, k=5)
+        indices, distances = search_index(index, query_vec, k=3)
 
-        # Build Context from Documents
-        context = "\n\n".join(docs[i].page_content for i in indices)
+        # Limit the size of each document's content to speed up LLM prompt creation
+        MAX_DOC_CHARS = 1000
+        context = "\n\n".join(docs[i].page_content[:MAX_DOC_CHARS] for i in indices)
 
         # Retrieve slot values with fallback
         main_product = self.slots.slots.get("main_product") or "Not specified"
@@ -643,7 +597,7 @@ Question:"""
         sustainability_goals = self.slots.slots.get("sustainability_goals") or "Not specified"
 
         # Generate main consultation response
-        consultation_response = self.consultation_chain.invoke({
+        '''consultation_response = self.consultation_chain.invoke({
             "context": context,
             "user_question": user_question,
             "main_product": main_product,
@@ -656,65 +610,49 @@ Question:"""
             "production_location": production_location,
             "shipping_location": shipping_location,
             "sustainability_goals": sustainability_goals,
-        })
+        })'''
 
        ################################ ROADMAP ######################################################
         roadmap_prompt = f"""
-            You are a sustainability expert helping a small business improve its packaging strategy.
+        You are a sustainability expert helping a small business improve packaging.
 
-            Business Profile:
-            Main Product: {main_product}
-            Production Location: {production_location}
-            Shipping Location: {shipping_location}
+        Business Profile:
+        - Main Product: {main_product}
+        - Production Location: {production_location}
+        - Shipping Location: {shipping_location}
 
-            Packaging Details:
-            Product Packaging: {product_packaging}
-            Packaging Material: {packaging_material}
-            Packaging Provider: {packaging_provider}
-            Reorder Interval: {packaging_reorder_interval}
-            Cost per Order: {packaging_cost_per_order}
-            Packaging Budget: {packaging_budget}
+        Packaging Details:
+        - Product Packaging: {product_packaging}
+        - Packaging Material: {packaging_material}
+        - Packaging Provider: {packaging_provider}
+        - Reorder Interval: {packaging_reorder_interval}
+        - Cost per Order: {packaging_cost_per_order}
+        - Packaging Budget: {packaging_budget}
 
-            Sustainability Goals:
-            {sustainability_goals}
+        Sustainability Goals:
+        {sustainability_goals}
 
-            User Question:
-            "{user_question}"
+        User Question:
+        "{user_question}"
 
-            Relevant Sustainability Info (from documents):
-            {context}
+        Relevant Info:
+        {context}
 
-            ---
+        Write a clear, friendly sustainability roadmap addressed directly to the business owner.
 
-            Write a friendly and well-structured sustainability roadmap for this business. Include:
+        Include these sections with bolded titles and an emoji in each header:
 
-            Thank you for providing the information about your business and packaging.
+        1. 🌟 Short Encouragement (1 sentence)  
+        2. 🔑 Key Strategy Points (3 concise bullet points)  
+        3. 📅 Goals divided into Short-term (1–3 months), Mid-term (3–6 months), and Long-term (6–12 months), with 2–3 bullet points each  
+        4. ✅ Final Checklist (3–4 practical action items)  
 
-            1. 🌿 **Roadmap to Becoming a Green Thumb** – 1–2 short sentences (under this title) acknowledging their current situation and encouraging them on their journey.
-            2. 💡 **Sustainability Strategy Overview** – 3–4 bullet points (no emojis) summarizing key goals.
-            3. ⚡️ **Short-Term Goals (1–2 Months)** – 3–5 actionable bullet points (no emojis).
-            4. 📈 **Mid-Term Goals (3–6 Months)** – 3–5 actionable bullet points (no emojis).
-            5. 🌱 **Long-Term Vision (6–12 Months)** – 3–5 bullet points (no emojis).
-            6. ✅ **Final Action Checklist** – A scannable to-do list (4–6 items, no emojis).
-
-            ✍️ Style:
-            - Be clear, supportive, and motivating.
-            - Don't greet again when starting or giving the roadmap or say anything like "welcome".
-            - Use bold text (with `**`) for section titles only — not for body text.
-            - Use emojis only for section headers.
-            - Keep bullet points clean and text-focused.
-            - Avoid large text blocks or redundant content.
-            - Use any relevant information from the imported PDFs.
-            - Write directly to the business owner (use “you”).
-            - Be empathetic and informative.
-            - Do **not** use Markdown headers (e.g., no `#`, `##`, or `###` syntax).
-            """
-        
+        Avoid large blocks of text and any greetings or closing questions.  
+        Use bold only for section titles.  
+        Do not use markdown header syntax like ###, ##, or # anywhere.
+        """
         # Generate roadmap using LLM
         roadmap_response = self.llm.invoke(roadmap_prompt).content.strip()
-
-        # Combine consultation and roadmap with separator
-        response = f"{consultation_response.strip()}\n\n---\n\n{roadmap_response}"
 
         #return response
         return roadmap_response, False, {"info": "Generated consultation and roadmap"}
@@ -761,9 +699,7 @@ Question:"""
         return "Here's a summary of the information so far:\n\n" + "\n".join(line + "  " for line in summary_parts)
 
 
-
     def get_response(self, user_question: str, chat_history: list, index, docs, generate_roadmap: bool = False) -> tuple[str, bool, dict, list | None]:
-
 
         """Main response generation method"""
         
@@ -784,13 +720,13 @@ Question:"""
         # Extract slots from message
         extraction_result = self.extract_slots_from_message(user_question) 
         
-        if self.wants_checklist(user_question):
+        '''if self.wants_checklist(user_question):
             result = self.generate_goal_checklist(user_question, index, docs)
             if len(result) == 3:
                 # If only 3 values returned, add None for roadmap
                 return (*result, None)
             else:
-                return result
+                return result'''
 
                 
         # State management
@@ -802,11 +738,6 @@ Question:"""
         if self.slots.is_complete():
             self.state = self.STATE_CONSULTATION
         
-        # Allow transition if at least SOME useful info is gathered
-        #filled_slots = [k for k, v in self.slots.slots.items() if v]
-        #if len(filled_slots) >= 3:  # You can adjust the threshold
-        #    self.state = self.STATE_CONSULTATION
-
         # Generate response based on state
         if self.state == self.STATE_GREETING:
             response = (
@@ -876,7 +807,7 @@ Question:"""
                     "bot_response": response_text,
                     "slots": {k: v if v is not None else "" for k, v in self.slots.slots.items()}
                 }
-                log_message.update(log_data)  # ✅ Include all consultation output like roadmap, sources, etc.
+                log_message.update(log_data)  
                 roadmap_items = log_data.get("roadmap") if log_data else []
                 if roadmap_items is None:
                     roadmap_items = []
