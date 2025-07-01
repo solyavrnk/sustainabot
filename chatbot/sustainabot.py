@@ -247,6 +247,7 @@ class SustainabilityConsultant:
     STATE_END = "end"
     STATE_QUESTION = "asking_question"
 
+
     def generate_greeting(self) -> str:
         return (
             "Hi! I’m your sustainability consultant ♻️, here to help with eco-friendly packaging 📦.\n\n"
@@ -859,7 +860,6 @@ Question:"""
         # Extract slots from message
         extraction_result = self.extract_slots_from_message(user_question)
         
-
                 
         # State management
         if self.state == self.STATE_GREETING:
@@ -870,6 +870,7 @@ Question:"""
         if self.slots.is_complete():
             self.state = self.STATE_CONSULTATION
         
+
         if intent == "greeting":
             self.state = self.STATE_GREETING
         elif self.slots.is_complete() and self.state == self.STATE_SLOT_FILLING:
@@ -972,6 +973,7 @@ Question:"""
                     "bot_response": response_text,
                     "slots": {k: v if v is not None else "" for k, v in self.slots.slots.items()}
                 }
+
                 log_message.update(log_data)
                 
                 roadmap_items = log_data.get("roadmap", []) if log_data else []
@@ -985,6 +987,7 @@ Question:"""
         elif self.state == self.STATE_END:
             # In end state, still allow checklist requests (already handled above)
             response = "Thank you for using the consultant! If you need further help, feel free to ask about specific steps or goals, or request a checklist for any particular goal."
+
             log_message = {
                 "user_message": user_question,
                 "bot_response": response
