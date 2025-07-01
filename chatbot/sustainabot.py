@@ -11,7 +11,6 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain.callbacks.base import BaseCallbackHandler
 from langchain_core.prompts import PromptTemplate
 from langchain_core.outputs import LLMResult
-from transitions import Machine
 
 from langchain_openai import ChatOpenAI
 #from langchain_huggingface import HuggingFaceEndpoint
@@ -108,7 +107,6 @@ pdf_files = [
     "./PDFs/The_new_plastics_economy_Rethinking_the_future_of_plastics.pdf",
     "./PDFs/reuse_revolution_scaling_returnable_packaging_study.pdf",
     "./PDFs/Reuse_rethinking_packaging.pdf",
-    # "./PDFs/Flexible_Packaging_Supplementary_information.pdf",  # PDF seems to be broken
     "./PDFs/Impact_Report_Summary_2024.pdf",
     "./PDFs/Towards_the_circular_economy.pdf",
 #
@@ -120,7 +118,6 @@ pdf_files = [
     "./PDFs/IJSRA-2024-2500.pdf",
     "./PDFs/LouckMartensandChoSAMPJ2010.pdf",
     "./PDFs/Small-Business-Britain-Small-Business-Green-Growth.pdf",
-    # "./PDFs/SME-EnterPRIZE-White-Paper.pdf",  # PDF seems to be broken
     "./PDFs/Sustainability_Practices_in_Small_Business_Venture.pdf",
     ]
 
@@ -139,9 +136,6 @@ print(f"Total pages loaded from PDFs: {len(all_docs)}")
 # Split large documents into smaller chunks (e.g., ~1000 chars):
 text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
 docs_split = text_splitter.split_documents(all_docs)
-
-print(f"Total document chunks after splitting: {len(docs_split)}")
-
 
 print(f"Total document chunks after splitting: {len(docs_split)}")
 
@@ -237,35 +231,38 @@ def search_index(index, query_vector: np.ndarray, k=5):
 
 ########## End of Data Binding ##########
 
+def get_conversation_lines(): #for using the current conversation history
+    if os.path.exists("conversation.jsonp"):
+        with open("conversation.jsonp", encoding="utf-8") as f:
+            return f.read().strip().split('\n')
+    else:
+        return []
+
 class SustainabilityConsultant:
     """Main consultant class with slot-filling capabilities"""
-
+    
     STATE_GREETING = "greeting"
     STATE_SLOT_FILLING = "slot_filling"
     STATE_CONSULTATION = "consultation"
     STATE_END = "end"
     STATE_QUESTION = "asking_question"
 
-
     def generate_greeting(self) -> str:
         return (
-            "Hello! I'm your sustainability consultant ♻️. I help small businesses find eco-friendly packaging solutions 📦.\n\n___\n\nTo provide you with a roadmap that helps you become more sustainable and is tailored to your current business situation, I’ll ask around 10 questions. Please take a moment to read the following instructions so you know how everything works:\n\n"
-            "• Settle in and answer everything thoroughly for the best results. This should take no more than ten minutes. ☕️\n\n"
-            "• Once we’ve collected all the necessary information, I’ll present a summary so you can review it and let me know if anything needs correcting.\n\n"
-            "• You can also ask for a summary of the collected data at any time.\n\n"
-            "• If you prefer not to share certain information, just type “none.” If you don’t know the answer, simply tell me or type “idk.” It’s not a problem! 😊\n\n"
-            "• If anything in the roadmap is unclear or you’d like more information, feel free to ask.\n\n"
-            "• If I’m unable to understand your message, even after you’ve tried rephrasing it a few times, feel free to type “none” to skip to the next question. You’ll be able to modify your answers once the summary is shown. (Since I’m still learning, this might happen occasionally, but don’t worry, we’ll still generate a reliable roadmap based on the information I do understand. 📚)\n\n"
-            "• And if you wish to end the conversation, you’re free to do so at any time.\n\n"
-            "➡️ To start off, could you tell me what your business’s main product is? ✏️📋"
+            "Hi! I’m your sustainability consultant ♻️, here to help with eco-friendly packaging 📦.\n\n"
+            "I’ll generate a roadmap to help your business become more sustainable, based on a few quick questions ✏️📋.\n\n"
+            "**How to answer:**\n\n"
+            "• Type **none** if you prefer not to answer or if I don’t understand your input.\n\n"
+            "• Type **idk** or **I don't know** if you’re unsure about an answer.\n\n"
+            "• Type **summary** to see an overview of the info I’ve collected so far.\n\n"
+            "• You can end the chat at any time.\n\n"
+            "➡️ First question: What’s your business’s main product?"
         )
-
-
-
     
     def __init__(self):
         self.state = self.STATE_GREETING
 
+        # Initialize LLM
         self.llm = ChatOpenAI(
             model="mistral-large-instruct",
             temperature=0.3,
@@ -281,7 +278,7 @@ class SustainabilityConsultant:
             base_url="https://chat-ai.academiccloud.de/v1",
         )
         
-    
+        self.state = self.STATE_GREETING
         self.slots = PackagingSlots()
         self.current_slot = None
 
@@ -292,13 +289,13 @@ class SustainabilityConsultant:
         self.question_generator = self.create_question_generator()
         self.consultation_chain = self.create_consultation_chain()
         self.goal_extractor = self.create_goal_extractor()
-        self.plan_generator = self.create_implementation_plan_generator()
+        #self.plan_generator = self.create_implementation_plan_generator()
+        #self.roadmap_generator = self.create_roadmap_generator()
         self.goodbye_detector = self.goodbye_detector()  
         self.checklist_intent_detector = self.create_checklist_intent_detector()       
         self.log_writer = LogWriter()
         self.question_answerer = self.create_question_answerer()
         self.question_intent_detector = self.create_question_intent_detector()
-
     def create_question_answerer(self):
         """Create a chain to answer general questions about sustainability and packaging"""
         prompt = """You are a sustainability expert specializing in packaging solutions for small businesses.
@@ -352,7 +349,6 @@ class SustainabilityConsultant:
             # Fallback to simple keyword detection
             question_keywords = ["what is", "how does", "why", "can you explain", "tell me about", "what are", "how to"]
             return any(keyword in user_message.lower() for keyword in question_keywords) or user_message.strip().endswith('?')
-
     def answer_general_question(self, user_question: str, index, docs) -> tuple[str, bool, dict, None]:
         """Answer a general question using the knowledge base"""
         # Get relevant context from documents
@@ -374,15 +370,6 @@ class SustainabilityConsultant:
         }
         
         return answer, is_loading, log_message, None  
-    def should_transition_to_slot_filling(self, intent: str, extraction_result: dict) -> bool:
-        """Determine if we should move from greeting to slot filling"""
-        return (self.state == self.STATE_GREETING and 
-                (intent in ["providing_info", "asking_question"] or extraction_result["updated_slots"]))
-
-    def should_transition_to_consultation(self) -> bool:
-        """Determine if we should move from slot filling to consultation"""
-        return (self.state == self.STATE_SLOT_FILLING and self.slots.is_complete())
-
     def create_checklist_intent_detector(self):
         """Creates a chain to detect if user wants a checklist, steps, or implementation plan"""
         prompt = """You are analyzing user messages to detect if they want a step-by-step checklist, implementation plan, or actionable steps.
@@ -428,7 +415,11 @@ Look for various ways people say goodbye including:
 - Appreciation + ending: "thanks for everything", "you've been helpful"
 - Different languages: "auf wiedersehen", "au revoir", "ciao", "adios"
 
+DO NOT END THE CONVERSATION  if the user is talking about how odten he reoorders pacakging:
+e.q. when the user send a mensage with "once a month", "every 2 weeks", "quarterly", "monthly", "every week" or similar.
+
 Respond with ONLY "YES" if the user really wants to end the conversation, or "NO" if they want to continue.
+
 
 User message: {user_message}
 
@@ -438,6 +429,8 @@ Answer:"""
         return chain
     def is_goodbye_message(self, user_message: str) -> bool:
         """Check if user message indicates they want to end the conversation"""
+        if any(word in user_message.lower() for word in ["summary", "summarize"]):
+                return False
         try:
             result = self.goodbye_detector.invoke({"user_message": user_message})
             return result.strip().upper() == "YES"
@@ -455,20 +448,21 @@ Extract the following information if present:
 1. Main product (what is your business's main product?)
 2. Product packaging (what do you use to package one item of your product and get it ready for shipping/delivery)
 3. Packaging material (which material is it? e.g., paper, organic, metal, glass, composite)
-4. Packaging reorder interval (how often you reorder packaging, e.g., monthly, quarterly, every ... weeks)
+4. Packaging reorder interval (how often you reorder packaging, e.g., monthly, quarterly, every month, every week, once a month, every 2 weeks, every ... weeks))
 5. Packaging cost per order (how much do you pay for the packaging per order? Prices, costs, amounts with currency, in EUR)
 6. Packaging provider (who is your current supplier or provider?)
 7. Packaging budget (look for budget, total amount available, spending limit)
 8. Production location (in which country and city do you operate or produce? Country names, locations, "we are in", "based in")
-9. Shipping location (where do you ship your product? Country names, locations)
+9. Shipping location (where do you ship your product? Country names, locations) It can be the same as the production location.
 10. Sustainability goals (do you need help with a packaging sustainability goal or want ideas?)
 
 Rules:
 - Only extract information that is explicitly mentioned
-- For prices/budgets: extract numbers with currency (convert to EUR if possible, insert euro if no currency is given)
+- For prices/budgets: extract numbers with or without currency (convert to EUR if possible).
+- For packaging reorder: extract anything that indicates frequency (e.g., "monthly", "every 2 weeks", "quarterly", "once a month")
 - For country: extract the specific country name
 - If information is not present, respond with "NOT_FOUND"
-
+- Be conservative - only extract if you're confident
 
 Format your response as JSON:
 {{
@@ -508,7 +502,44 @@ Classification:"""
 
         chain = PromptTemplate.from_template(prompt) | self.extractor_llm | StrOutputParser()
         return chain
-    
+    def create_implementation_plan_generator(self):
+        prompt = """You are an expert in sustainable packaging for small businesses.
+
+        Given the user's goal:
+        {goal}
+
+        And relevant information from our knowledge base:
+        {context}
+
+        Generate a **detailed, step-by-step checklist** (3–6 steps) to help the user implement their goal. Keep each step clear and actionable.
+
+        Checklist:"""
+        chain = PromptTemplate.from_template(prompt) | self.llm | StrOutputParser()
+        return chain
+
+    def generate_goal_checklist(self, user_message: str, index, docs) -> tuple[str, bool, dict, None]:
+        goal = self.goal_extractor.invoke({"user_message": user_message}).strip()
+        
+        if goal == "NOT_FOUND":
+            response = "I couldn't identify a clear goal in your message. Could you rephrase it?"
+            is_loading = False
+            log_message = {"user_message": user_message, "bot_response": response}
+            return response, is_loading, log_message, None
+
+        # Get relevant context from documents
+        query_vec = get_query_embedding(goal)
+        indices, _ = search_index(index, query_vec, k=5)
+        context = "\n\n".join(docs[i].page_content for i in indices)
+
+        checklist = self.plan_generator.invoke({
+            "goal": goal,
+            "context": context
+        })
+        
+        is_loading = False
+        log_message = {"user_message": user_message, "bot_response": checklist}
+        return checklist, is_loading, log_message, None
+
     def create_question_generator(self):
         """Create a chain to generate questions for missing slots"""
         prompt = """You are a friendly sustainability consultant helping small businesses with packaging. 
@@ -654,58 +685,19 @@ Question:"""
         chain = PromptTemplate.from_template(prompt) | self.extractor_llm | StrOutputParser()
         return chain
     
-    def create_implementation_plan_generator(self):
-        prompt = """You are an expert in sustainable packaging for small businesses.
-
-        Given the user's goal:
-        {goal}
-
-        And relevant information from our knowledge base:
-        {context}
-
-        Generate a **detailed, step-by-step checklist** (3–6 steps) to help the user implement their goal. Keep each step clear and actionable.
-
-        Checklist:"""
-        chain = PromptTemplate.from_template(prompt) | self.llm | StrOutputParser()
-        return chain
-
-    def generate_goal_checklist(self, user_message: str, index, docs) -> tuple[str, bool, dict, None]:
-        goal = self.goal_extractor.invoke({"user_message": user_message}).strip()
-        
-        if goal == "NOT_FOUND":
-            response = "I couldn't identify a clear goal in your message. Could you rephrase it?"
-            is_loading = False
-            log_message = {"user_message": user_message, "bot_response": response}
-            return response, is_loading, log_message, None
-
-        # Get relevant context from documents
-        query_vec = get_query_embedding(goal)
-        indices, _ = search_index(index, query_vec, k=5)
-        context = "\n\n".join(docs[i].page_content for i in indices)
-
-        checklist = self.plan_generator.invoke({
-            "goal": goal,
-            "context": context
-        })
-        
-        is_loading = False
-        log_message = {"user_message": user_message, "bot_response": checklist}
-        return checklist, is_loading, log_message, None
-
-    
     def get_consultation_response(self, user_question: str, index, docs) -> str:
         """Generate consultation response using retrieved context"""
 
         print("\n🛠️ Roadmap is being created...\nThis might take a moment ⏳")  
-
         # Convert User Question to Vector
         query_vec = get_query_embedding(user_question)
 
         # Search for Relevant Documents (chooses the k most similar documents)
-        indices, distances = search_index(index, query_vec, k=5)
+        indices, distances = search_index(index, query_vec, k=3)
 
-        # Build Context from Documents
-        context = "\n\n".join(docs[i].page_content for i in indices)
+        # Limit the size of each document's content to speed up LLM prompt creation
+        MAX_DOC_CHARS = 1000
+        context = "\n\n".join(docs[i].page_content[:MAX_DOC_CHARS] for i in indices)
 
         # Retrieve slot values with fallback
         main_product = self.slots.slots.get("main_product") or "Not specified"
@@ -720,7 +712,7 @@ Question:"""
         sustainability_goals = self.slots.slots.get("sustainability_goals") or "Not specified"
 
         # Generate main consultation response
-        consultation_response = self.consultation_chain.invoke({
+        '''consultation_response = self.consultation_chain.invoke({
             "context": context,
             "user_question": user_question,
             "main_product": main_product,
@@ -733,103 +725,103 @@ Question:"""
             "production_location": production_location,
             "shipping_location": shipping_location,
             "sustainability_goals": sustainability_goals,
-        })
+        })'''
 
        ################################ ROADMAP ######################################################
         roadmap_prompt = f"""
-            You are a sustainability expert helping a small business improve its packaging strategy.
+        You are a sustainability expert helping a small business improve packaging.
 
-            Business Profile:
-            Main Product: {main_product}
-            Production Location: {production_location}
-            Shipping Location: {shipping_location}
+        Business Profile:
+        - Main Product: {main_product}
+        - Production Location: {production_location}
+        - Shipping Location: {shipping_location}
 
-            Packaging Details:
-            Product Packaging: {product_packaging}
-            Packaging Material: {packaging_material}
-            Packaging Provider: {packaging_provider}
-            Reorder Interval: {packaging_reorder_interval}
-            Cost per Order: {packaging_cost_per_order}
-            Packaging Budget: {packaging_budget}
+        Packaging Details:
+        - Product Packaging: {product_packaging}
+        - Packaging Material: {packaging_material}
+        - Packaging Provider: {packaging_provider}
+        - Reorder Interval: {packaging_reorder_interval}
+        - Cost per Order: {packaging_cost_per_order}
+        - Packaging Budget: {packaging_budget}
 
-            Sustainability Goals:
-            {sustainability_goals}
+        Sustainability Goals:
+        {sustainability_goals}
 
-            User Question:
-            "{user_question}"
+        User Question:
+        "{user_question}"
 
-            Relevant Sustainability Info (from documents):
-            {context}
+        Relevant Info:
+        {context}
 
-            ---
+        Write a clear, friendly sustainability roadmap addressed directly to the business owner.
 
-            Write a friendly and well-structured sustainability roadmap for this business. Include:
+        Include these sections with bolded titles and an emoji in each header:
 
-            Thank you for providing the information about your business and packaging.
+        1. 🌟 Short Encouragement (1 sentence)  
+        2. 🔑 Key Strategy Points (3 concise bullet points)  
+        3. 📅 Goals divided into Short-term (1–3 months), Mid-term (3–6 months), and Long-term (6–12 months), with 2–3 bullet points each  
+        4. ✅ Final Checklist (3–4 practical action items)  
 
-            1. 🌿 **Roadmap to Becoming a Green Thumb** – 1–2 short sentences (under this title) acknowledging their current situation and encouraging them on their journey.
-            2. 💡 **Sustainability Strategy Overview** – 3–4 bullet points (no emojis) summarizing key goals.
-            3. ⚡️ **Short-Term Goals (1–2 Months)** – 3–5 actionable bullet points (no emojis).
-            4. 📈 **Mid-Term Goals (3–6 Months)** – 3–5 actionable bullet points (no emojis).
-            5. 🌱 **Long-Term Vision (6–12 Months)** – 3–5 bullet points (no emojis).
-            6. ✅ **Final Action Checklist** – A scannable to-do list (4–6 items, no emojis).
-
-            ✍️ Style:
-            - Be clear, supportive, and motivating.
-            - Don't greet again when starting or giving the roadmap or say anything like "welcome".
-            - Use bold text (with `**`) for section titles only — not for body text.
-            - Use emojis only for section headers.
-            - Keep bullet points clean and text-focused.
-            - Avoid large text blocks or redundant content.
-            - Use any relevant information from the imported PDFs.
-            - Write directly to the business owner (use “you”).
-            - Be empathetic and informative.
-            - Do **not** use Markdown headers (e.g., no `#`, `##`, or `###` syntax).
-            """
-        
+        Avoid large blocks of text and any greetings or closing questions.  
+        Use bold only for section titles.  
+        Do not use markdown header syntax like ###, ##, or # anywhere.
+        """
         # Generate roadmap using LLM
         roadmap_response = self.llm.invoke(roadmap_prompt).content.strip()
 
-        # Combine consultation and roadmap with separator
-        response = f"{consultation_response.strip()}\n\n---\n\n{roadmap_response}"
-
         #return response
         return roadmap_response, False, {"info": "Generated consultation and roadmap"}
+    
+    def wrap_up_prompt(self):
+        """Liest die zuletzt bekannten Slot-Werte aus der conversation.jsonp-Datei und erzeugt eine Zusammenfassung."""
+        try:
+            with open("conversation.jsonp", "r", encoding="utf-8") as f:
+                content = f.read()
 
+            # Zerlege in mögliche JSON-Objekte anhand von Start-Zeilen
+            raw_blocks = content.split('\n{')
+            json_blocks = ['{' + block if not block.startswith('{') else block for block in raw_blocks]
+            json_blocks = [block.strip() for block in json_blocks if block.strip()]
 
-    def generate_wrap_up_summary(self) -> str:
-        """Generate a summary 4-6 sentences of the user's current situation based on filled slots."""
-        slots = self.slots.slots
-        prompt = (
-            "Based on the user's inputs, summarize their current situation.\n"
-            f"Main Product: {slots.get('main_product', '')}\n"
-            f"Product Packaging: {slots.get('product_packaging', '')}\n"
-            f"Packaging Material: {slots.get('packaging_material', '')}\n"
-            f"Packaging Reorder Interval: {slots.get('packaging_reorder_interval', '')}\n"
-            f"Packaging Cost Per Order: {slots.get('packaging_cost_per_order', '')}\n"
-            f"Packaging Provider: {slots.get('packaging_provider', '')}\n"
-            f"Packaging Budget: {slots.get('packaging_budget', '')}\n"
-            f"Production Location: {slots.get('production_location', '')}\n"
-            f"Shipping Location: {slots.get('shipping_location', '')}\n"
-            f"Sustainability Goals: {slots.get('sustainability_goals', '')}\n"
-            "\nCreate a short summary (4-6 sentences)."
-        )
-        summary = self.llm.invoke(prompt)
-        return summary.content if hasattr(summary, "content") else str(summary)
+            slots = {}
+
+            for block in reversed(json_blocks):
+                try:
+                    entry = json.loads(block)
+                    if "slots" in entry and isinstance(entry["slots"], dict) and any(entry["slots"].values()):
+                        slots = entry["slots"]
+                        break
+                except json.JSONDecodeError:
+                    continue 
+
+        except Exception as e:
+                slots = self.slots.slots
+
+        # Zusammenfassung erzeugen
+        summary_parts = [
+            f"📦 **Main product:** {slots.get('main_product', 'Not provided')}",
+            f"🎁 **Product packaging:** {slots.get('product_packaging', 'Not provided')}",
+            f"🧱 **Packaging material:** {slots.get('packaging_material', 'Not provided')}",
+            f"♻️ **Reorder interval:** {slots.get('packaging_reorder_interval', 'Not provided')}",
+            f"💶 **Cost per order:** {slots.get('packaging_cost_per_order', 'Not provided')}",
+            f"🏭 **Packaging provider:** {slots.get('packaging_provider', 'Not provided')}",
+            f"💰 **Budget:** {slots.get('packaging_budget', 'Not provided')}",
+            f"🌍 **Production location:** {slots.get('production_location', 'Not provided')}",
+            f"🚚 **Shipping location:** {slots.get('shipping_location', 'Not provided')}",
+            f"🌱 **Sustainability goals:** {slots.get('sustainability_goals', 'Not provided')}",
+        ]
+
+        return "Here's a summary of the information so far:\n\n" + "\n".join(line + "  " for line in summary_parts)
 
 
     def get_response(self, user_question: str, chat_history: list, index, docs, generate_roadmap: bool = False) -> tuple[str, bool, dict, list | None]:
-        """Main response generation method"""
 
+        """Main response generation method"""
         # Handle goodbye messages first
         if self.is_goodbye_message(user_question):
             return "Thank you for using the Sustainable Packaging Consultant! Have a green day! 🌎", False, {}, None
         
-        # Classify user intent
-        intent = self.slot_classifier.invoke({"user_message": user_question}).strip().lower()
         
-        # Extract slots from message
-        extraction_result = self.extract_slots_from_message(user_question)
         
         # Handle checklist requests (high priority)
         if self.wants_checklist(user_question):
@@ -842,8 +834,6 @@ Question:"""
             else:
                 # Fallback for unexpected result format
                 return "I encountered an issue generating your checklist. Please try again.", False, {}, None
-        
-        # Handle general questions (but not checklists)
         if self.is_asking_question(user_question):
             result = self.answer_general_question(user_question, index, docs)
             # Ensure we always return 4 values
@@ -854,7 +844,32 @@ Question:"""
             else:
                 return "I encountered an issue answering your question. Please try again.", False, {}, None
         
-   
+        if any(word in user_question.lower() for word in ["summary", "summarize"]):
+            summary_prompt = self.wrap_up_prompt()  # Generate the summary prompt
+            response = summary_prompt  # Use the generated summary prompt directly as the response
+            is_loading = False
+            log_message = {
+                "user_message": user_question,
+                "bot_response": response,
+                "slots": {k: v if v is not None else "" for k, v in self.slots.slots.items()}
+            }
+        # Classify user intent
+        intent = self.slot_classifier.invoke({"user_message": user_question}).strip().lower()
+        
+        # Extract slots from message
+        extraction_result = self.extract_slots_from_message(user_question)
+        
+
+                
+        # State management
+        if self.state == self.STATE_GREETING:
+            if intent == ["providing_info"] or extraction_result["updated_slots"]:
+                self.state = self.STATE_SLOT_FILLING
+        
+        # If all slots are filled, move to consultation
+        if self.slots.is_complete():
+            self.state = self.STATE_CONSULTATION
+        
         if intent == "greeting":
             self.state = self.STATE_GREETING
         elif self.slots.is_complete() and self.state == self.STATE_SLOT_FILLING:
@@ -878,7 +893,6 @@ Question:"""
                     "slots": {k: v if v is not None else "" for k, v in self.slots.slots.items()}
                 }
                 return response, False, log_message, None
-        
         if self.state == self.STATE_SLOT_FILLING:
             # Update the current slot with user input
             self.update_current_slot(user_question)
@@ -904,8 +918,7 @@ Question:"""
                     if not generate_roadmap:
                         # Return loading message
                         loading_message = "🛠️ Roadmap is being created... This might take a moment ⏳"
-                        log_message = {
-                            "user_message": user_question,
+                        log_message = {"user_message": user_question,
                             "bot_response": loading_message,
                             "slots": {k: v if v is not None else "" for k, v in self.slots.slots.items()}
                         }
@@ -977,8 +990,7 @@ Question:"""
                 "bot_response": response
             }
             return response, False, log_message, None
-        
-        # Fallback for any unhandled cases
+       # Fallback for any unhandled cases
         response = "I'm not sure how to help with that. Could you please rephrase your question or let me know what specific information you need?"
         log_message = {
             "user_message": user_question,
@@ -986,6 +998,7 @@ Question:"""
             "slots": {k: v if v is not None else "" for k, v in self.slots.slots.items()}
         }
         return response, False, log_message, None
+
 def main():
     """Main application loop"""
 
@@ -1031,7 +1044,7 @@ def main():
 
     while True:
         user_message = input("\n💬 You: ")
-         
+      
         
         try:
             bot_response, log_message = consultant.get_response(user_message, chat_history, index, docs)
