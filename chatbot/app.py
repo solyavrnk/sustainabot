@@ -127,7 +127,7 @@ else:
                     "generate_roadmap": st.session_state.is_creating_roadmap,
                     "session_id": st.session_state.session_id
                 },
-                timeout=600  # 10 min timeout
+                timeout=360 
             )
             response_data = response.json()
             st.session_state.messages.append({"role": "bot", "content": response_data["response"]})
@@ -173,7 +173,7 @@ else:
 
 
     if not st.session_state.is_loading:
-        if user_input and user_input != st.session_state.last_input:
+        if user_input:
             st.session_state.is_loading = True
             st.session_state.is_creating_roadmap = False  
             st.session_state.last_input = user_input
@@ -195,7 +195,7 @@ else:
                     "generate_roadmap": st.session_state.is_creating_roadmap,
                     "session_id": st.session_state.session_id
                 },
-                timeout=600  # 10 min timeout
+                timeout=360  
             )
 
             response_data = response.json()

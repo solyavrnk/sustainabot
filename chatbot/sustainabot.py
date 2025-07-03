@@ -290,7 +290,7 @@ class SustainabilityConsultant:
         self.question_generator = self.create_question_generator()
         self.consultation_chain = self.create_consultation_chain()
         self.goal_extractor = self.create_goal_extractor()
-        #self.plan_generator = self.create_implementation_plan_generator()
+        self.plan_generator = self.create_implementation_plan_generator()
         #self.roadmap_generator = self.create_roadmap_generator()
         self.goodbye_detector = self.goodbye_detector()  
         self.checklist_intent_detector = self.create_checklist_intent_detector()       
@@ -730,42 +730,47 @@ Question:"""
 
        ################################ ROADMAP ######################################################
         roadmap_prompt = f"""
-        You are a sustainability expert helping a small business improve packaging.
+                You are a sustainability expert helping a small business improve packaging.
 
-        Business Profile:
-        - Main Product: {main_product}
-        - Production Location: {production_location}
-        - Shipping Location: {shipping_location}
+                Business Profile:
+                - Main Product: {main_product}
+                - Production Location: {production_location}
+                - Shipping Location: {shipping_location}
 
-        Packaging Details:
-        - Product Packaging: {product_packaging}
-        - Packaging Material: {packaging_material}
-        - Packaging Provider: {packaging_provider}
-        - Reorder Interval: {packaging_reorder_interval}
-        - Cost per Order: {packaging_cost_per_order}
-        - Packaging Budget: {packaging_budget}
+                Packaging Details:
+                - Product Packaging: {product_packaging}
+                - Packaging Material: {packaging_material}
+                - Packaging Provider: {packaging_provider}
+                - Reorder Interval: {packaging_reorder_interval}
+                - Cost per Order: {packaging_cost_per_order}
+                - Packaging Budget: {packaging_budget}
 
-        Sustainability Goals:
-        {sustainability_goals}
+                Sustainability Goals:
+                {sustainability_goals}
 
-        User Question:
-        "{user_question}"
+                User Question:
+                "{user_question}"
 
-        Relevant Info:
-        {context}
+                Relevant Info:
+                {context}
 
-        Write a clear, friendly sustainability roadmap addressed directly to the business owner.
+                Write a clear, friendly sustainability roadmap addressed directly to the business owner.
 
-        Include these sections with bolded titles and an emoji in each header:
+                Make sure to consider the provided packaging budget when suggesting strategies and action items.
 
-        1. 🌟 Short Encouragement (1 sentence)  
-        2. 🔑 Key Strategy Points (3 concise bullet points)  
-        3. 📅 Goals divided into Short-term (1–3 months), Mid-term (3–6 months), and Long-term (6–12 months), with 2–3 bullet points each  
-        4. ✅ Final Checklist (3–4 practical action items)  
+                Start with a small intro with the information gathered.
+                
+                Include these sections with bolded titles and an emoji in each header:
 
-        Avoid large blocks of text and any greetings or closing questions.  
-        Use bold only for section titles.  
-        Do not use markdown header syntax like ###, ##, or # anywhere.
+                - We have created this roadmap based on the information you provided (1 sentence)
+                
+                - 🔑 Key Strategy Points (3 concise bullet points, at least one related to budget or cost-effectiveness)  
+                - 📅 Goals divided into Short-term (1–3 months), Mid-term (3–6 months), and Long-term (6–12 months), with 2–3 bullet points each (include budget-friendly options where possible)  
+                - ✅ Final Checklist (3–4 practical action items, considering the budget)  
+
+                Avoid large blocks of text and any greetings or closing questions.  
+                Use bold only for section titles.  
+                Do not use markdown header syntax like **, ###, ##, or # anywhere.
         """
         # Generate roadmap using LLM
         roadmap_response = self.llm.invoke(roadmap_prompt).content.strip()
