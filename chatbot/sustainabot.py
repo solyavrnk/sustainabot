@@ -453,7 +453,10 @@ Answer:"""
      
     def create_slot_extractor(self):
         """Creates a chain to extract slot values from user input"""
-        prompt = """You are an information extractor for a sustainability consultant. Extract specific information from user messages.
+        prompt = """ IMPORTANT: Your response MUST be strictly JSON only with no extra text.
+
+        
+        You are an information extractor for a sustainability consultant. Extract specific information from user messages.
 
 Extract the following information if present:
 1. Main product (what is your business's main product?)
@@ -464,6 +467,27 @@ Extract the following information if present:
 6. Packaging provider (who is your current supplier or provider?)
 7. Packaging budget (look for budget, total amount available, spending limit)
 8. Production location (in which country and city do you operate or produce? Country names, locations, "we are in", "based in")
+    Examples:
+    User message: "in berlin"
+    Extraction:
+    {
+        "production_location": "berlin",
+        ...
+    }
+
+    User message: "based in Berlin"
+    Extraction:
+    {
+        "production_location": "Berlin",
+        ...
+    }
+
+    User message: "we produce in Berlin, Germany"
+    Extraction:
+    {
+        "production_location": "Berlin, Germany",
+        ...
+    }
 9. Shipping location (where do you ship your product? Country names, locations) It can be the same as the production location.
 10. Sustainability goals (do you need help with a packaging sustainability goal or want ideas?)
 
@@ -564,7 +588,7 @@ Current slots status:
 Missing information: {missing_slots}
 
 Generate ONE friendly, conversational question to ask for the MOST IMPORTANT missing information. 
-Make it sound natural and explain why you need this information.
+Make it sound natural and explain why you need this information. DO NOT begin the question with "To start".
 
 Question:"""
 
@@ -634,7 +658,22 @@ Question:"""
                 if value != "NOT_FOUND" and value and slot_name in self.slots.slots:
                     self.slots.update_slot(slot_name, value)
                     updated_slots.append(slot_name)
-            
+
+            # Fallback: If production_location is still NOT_FOUND and user input is short, assume it's a location
+            if (
+                extracted_data.get("production_location") == "NOT_FOUND"
+                and len(user_message.strip().split()) <= 3
+                and user_message.strip().lower() not in ["none", "idk", "i don't know"]
+            ):
+                # Clean input - remove common prepositions
+                cleaned_location = user_message.strip().lower()
+                for prefix in ["in ", "at ", "on "]:
+                    if cleaned_location.startswith(prefix):
+                        cleaned_location = cleaned_location[len(prefix):].strip()
+                        break
+                self.slots.update_slot("production_location", cleaned_location)
+                updated_slots.append("production_location")
+
             return {"updated_slots": updated_slots, "extraction": extracted_data}
             
         except Exception as e:
