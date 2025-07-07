@@ -260,8 +260,6 @@ class SustainabilityConsultant:
         return (
             "Hi! I’m your sustainability consultant ♻️, here to help with eco-friendly packaging 📦.\n\n"
             "I’ll generate a roadmap to help your business become more sustainable, based on a few quick questions ✏️📋.\n\n"
-            "Unfortunately, at this stage I can only support enterprises operating in Berlin.\n\n"
-
             "**How to answer:**\n\n"
             "• Type **none** if you prefer not to answer or if I don’t understand your input.\n\n"
             "• Type **idk** or **I don't know** if you’re unsure about an answer.\n\n"
@@ -468,28 +466,28 @@ Extract the following information if present:
 5. Packaging cost per order (how much do you pay for the packaging per order? Prices, costs, amounts with currency, in EUR)
 6. Packaging provider (who is your current supplier or provider?)
 7. Packaging budget (look for budget, total amount available, spending limit)
-8. Production location (in which country and city do you operate or produce? Country names, locations, "we are in", "based in")
+8. Production location (in which country and city do you operate or produce? Country names, locations, "in city", "we are in", "based in")
     Examples:
     User message: "in berlin"
     Extraction:
-    {
+    {{
         "production_location": "berlin",
         ...
-    }
+    }}
 
     User message: "based in Berlin"
     Extraction:
-    {
+    {{
         "production_location": "Berlin",
         ...
-    }
+    }}
 
     User message: "we produce in Berlin, Germany"
     Extraction:
-    {
+    {{
         "production_location": "Berlin, Germany",
         ...
-    }
+    }}
 9. Shipping location (where do you ship your product? Country names, locations) It can be the same as the production location.
 10. Sustainability goals (do you need help with a packaging sustainability goal or want ideas?)
 
@@ -526,19 +524,28 @@ Extraction:"""
         """Create a chain to classify if user is providing information or asking questions"""
         prompt = """Classify the user's intent in this conversation about sustainable packaging.
 
-Possible classifications:
-- "providing_info" - User is giving information about their packaging situation
-- "asking_question" - User is asking about sustainability, alternatives, or advice
-- "greeting" - User is greeting or starting conversation
-- "unclear" - User's intent is unclear or they're confused
+    Possible classifications:
+    - "providing_info" - User is giving information about their packaging situation (e.g., providing location, cost, material, provider, product)
+    - "asking_question" - User is asking about sustainability, alternatives, or advice
+    - "greeting" - User is greeting or starting conversation (e.g., "hello", "hi", "good morning")
+    - "unclear" - User's intent is unclear or they're confused
 
-Respond with only ONE word from the above options.
+    Respond with only ONE word from the above options.
 
-User message: {user_message}
-Classification:"""
+    Examples:
+    User message: "hi there" → greeting  
+    User message: "hello" → greeting  
+    User message: "in berlin" → providing_info  
+    User message: "we are in Germany" → providing_info  
+    User message: "what packaging do you recommend?" → asking_question  
+    User message: "I don't get this" → unclear  
+
+    User message: {user_message}
+    Classification:"""
 
         chain = PromptTemplate.from_template(prompt) | self.extractor_llm | StrOutputParser()
         return chain
+
     def create_implementation_plan_generator(self):
         prompt = """You are an expert in sustainable packaging for small businesses.
 
@@ -629,18 +636,15 @@ Question:"""
 
         chain = PromptTemplate.from_template(prompt) | self.llm | StrOutputParser()
         return chain
-    
+        
     def extract_slots_from_message(self, user_message: str) -> Dict:
         """Extract slot information from user message"""
         try:
-            # Get extraction
             extraction_result = self.slot_extractor.invoke({"user_message": user_message})
-            
-            # Try to parse JSON
+
             try:
                 extracted_data = json.loads(extraction_result)
             except json.JSONDecodeError:
-                # If JSON parsing fails, try to extract manually
                 extracted_data = {
                     "main_product": "NOT_FOUND",
                     "product_packaging": "NOT_FOUND",
@@ -653,31 +657,47 @@ Question:"""
                     "shipping_location": "NOT_FOUND",
                     "sustainability_goals": "NOT_FOUND",
                 }
-            
-            # Update slots with extracted information
+
             updated_slots = []
             for slot_name, value in extracted_data.items():
                 if value != "NOT_FOUND" and value and slot_name in self.slots.slots:
                     self.slots.update_slot(slot_name, value)
                     updated_slots.append(slot_name)
 
-            # Fallback: If production_location is still NOT_FOUND and user input is short, assume it's a location
+            cleaned_input = user_message.strip().lower()
+
+            # 👇 Strict fallback for production_location ONLY if we're asking for it
             if (
-                extracted_data.get("production_location") == "NOT_FOUND"
-                and len(user_message.strip().split()) <= 3
-                and user_message.strip().lower() not in ["none", "idk", "i don't know"]
+                self.current_slot == "production_location"
+                and extracted_data.get("production_location") == "NOT_FOUND"
+                and len(cleaned_input) >= 4
+                and any(char.isalpha() for char in cleaned_input)
+                and cleaned_input not in ["none", "idk", "i don't know", "yes", "no", "maybe", "not sure"]
             ):
-                # Clean input - remove common prepositions
-                cleaned_location = user_message.strip().lower()
                 for prefix in ["in ", "at ", "on "]:
-                    if cleaned_location.startswith(prefix):
-                        cleaned_location = cleaned_location[len(prefix):].strip()
+                    if cleaned_input.startswith(prefix):
+                        cleaned_input = cleaned_input[len(prefix):].strip()
                         break
-                self.slots.update_slot("production_location", cleaned_location)
+                self.slots.update_slot("production_location", cleaned_input)
                 updated_slots.append("production_location")
 
+            # 👇 Strict fallback for shipping_location ONLY if we're asking for it
+            elif (
+                self.current_slot == "shipping_location"
+                and extracted_data.get("shipping_location") == "NOT_FOUND"
+                and len(cleaned_input) >= 4
+                and any(char.isalpha() for char in cleaned_input)
+                and cleaned_input not in ["none", "idk", "i don't know", "yes", "no", "maybe", "not sure"]
+            ):
+                for prefix in ["to ", "into ", "in ", "towards "]:
+                    if cleaned_input.startswith(prefix):
+                        cleaned_input = cleaned_input[len(prefix):].strip()
+                        break
+                self.slots.update_slot("shipping_location", cleaned_input)
+                updated_slots.append("shipping_location")
+
             return {"updated_slots": updated_slots, "extraction": extracted_data}
-            
+
         except Exception as e:
             print(f"Error in slot extraction: {e}")
             return {"updated_slots": [], "extraction": {}}
