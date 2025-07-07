@@ -84,7 +84,7 @@ load_dotenv()
 if not API_KEY:
     API_KEY = getpass.getpass("Enter your CHAT_AI_ACCESS_KEY: ")'''
 
-API_KEY = "0cfe7441cc466c7c201a0afa04047da7" # Replace with your actual API key
+API_KEY = "f353086fb2411f6927bb73247bc5a024" # Replace with your actual API key
 
 ########## Data Binding ########## 
 
@@ -961,7 +961,8 @@ Question:"""
                 self.state = self.STATE_SLOT_FILLING
             else:
                 response = (
-                    "Hello!👋\nI'm your sustainability consultant. I help small businesses find eco-friendly packaging solutions. "
+                    # "Hello!👋\nI'm your sustainability consultant. I help small businesses find eco-friendly packaging solutions. "
+                    "Sorry, I didn't catch that. Could you rephrase? \n"
                     f"{self.generate_slot_question()}"
                 )
                 log_message = {
