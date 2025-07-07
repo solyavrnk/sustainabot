@@ -260,6 +260,8 @@ class SustainabilityConsultant:
         return (
             "Hi! I’m your sustainability consultant ♻️, here to help with eco-friendly packaging 📦.\n\n"
             "I’ll generate a roadmap to help your business become more sustainable, based on a few quick questions ✏️📋.\n\n"
+            "Unfortunately, at this stage I can only support enterprises operating in Berlin.\n\n"
+
             "**How to answer:**\n\n"
             "• Type **none** if you prefer not to answer or if I don’t understand your input.\n\n"
             "• Type **idk** or **I don't know** if you’re unsure about an answer.\n\n"
