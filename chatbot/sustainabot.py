@@ -941,7 +941,7 @@ Question:"""
                 self.state = self.STATE_SLOT_FILLING
             else:
                 response = (
-                    "Hello!👋\nI'm your sustainability consultant. I help small businesses find eco-friendly packaging solutions. "
+                    # "Hello!👋\nI'm your sustainability consultant. I help small businesses find eco-friendly packaging solutions. "
                     f"{self.generate_slot_question()}"
                 )
                 log_message = {
@@ -1083,7 +1083,6 @@ def main():
     while True:
         user_message = input("\n💬 You: ")
       
-        
         try:
             bot_response, log_message = consultant.get_response(user_message, chat_history, index, docs)
             print(f"\n🤖 Consultant: {bot_response}")
